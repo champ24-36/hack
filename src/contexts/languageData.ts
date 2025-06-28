@@ -15,9 +15,9 @@ export const SUPPORTED_LANGUAGES: Language[] = [
   { code: 'mr', name: 'Marathi', nativeName: 'मराठी', flag: '🇮🇳' },
   { code: 'gu', name: 'Gujarati', nativeName: 'ગુજરાતી', flag: '🇮🇳' },
   { code: 'pa', name: 'Punjabi', nativeName: 'ਪੰਜਾਬੀ', flag: '🇮🇳' },
-  { code: 'ur', name: 'Urdu', nativeName: 'اردو', flag: '🇮🇳' }
+  { code: 'ur', name: 'Urdu', nativeName: 'اردو', flag: '🇵🇰' }
 ];
 
-export function getLanguageByCode(code: string): Language {
+export const getLanguageByCode = (code: string): Language => {
   return SUPPORTED_LANGUAGES.find(lang => lang.code === code) || SUPPORTED_LANGUAGES[0];
-} 
+};

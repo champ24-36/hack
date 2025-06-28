@@ -11,11 +11,13 @@ import Bot from 'lucide-react/dist/esm/icons/bot';
 import User from 'lucide-react/dist/esm/icons/user';
 import MicOff from 'lucide-react/dist/esm/icons/mic-off';
 import Globe from 'lucide-react/dist/esm/icons/globe';
+import AlertCircle from 'lucide-react/dist/esm/icons/alert-circle';
 import Header from '../components/Header';
 import AnimatedSection from '../components/AnimatedSection';
 import LanguageSelector from '../components/LanguageSelector';
 import useLanguage from '../contexts/useLanguage';
 import { SUPPORTED_LANGUAGES, type Language } from '../contexts/languageData';
+import { geminiService, type ChatMessage as GeminiChatMessage } from '../services/geminiService';
 
 interface Message {
   id: string;
@@ -24,6 +26,7 @@ interface Message {
   timestamp: Date;
   attachments?: FileAttachment[];
   language?: string;
+  isError?: boolean;
 }
 
 interface FileAttachment {
@@ -53,6 +56,7 @@ const ChatPage: React.FC = () => {
   const [currentSessionId, setCurrentSessionId] = useState('current');
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState<GeminiChatMessage[]>([]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -68,6 +72,8 @@ const ChatPage: React.FC = () => {
       timestamp: new Date(),
       language: selectedLanguage.code
     }]);
+    // Reset conversation history when language changes
+    setConversationHistory([]);
   }, [selectedLanguage]);
 
   // Only auto-scroll after user has sent their first message
@@ -128,16 +134,16 @@ const ChatPage: React.FC = () => {
 
   const getWelcomeMessage = (languageCode: string): string => {
     const welcomeMessages: { [key: string]: string } = {
-      'en': "Hello! I'm your AI legal assistant. I'm here to help you understand your rights and provide legal guidance. What legal question can I help you with today?",
-      'hi': "नमस्ते! मैं आपका AI कानूनी सहायक हूं। मैं यहां आपके अधिकारों को समझने और कानूनी मार्गदर्शन प्रदान करने के लिए हूं। आज मैं आपकी किस कानूनी समस्या में मदद कर सकता हूं?",
-      'ta': "வணக்கம்! நான் உங்கள் AI சட்ட உதவியாளர். உங்கள் உரிமைகளைப் புரிந்துகொள்ளவும் சட்ட வழிகாட்டுதலை வழங்கவும் நான் இங்கே இருக்கிறேன். இன்று நான் உங்களுக்கு எந்த சட்டக் கேள்வியில் உதவ முடியும்?",
-      'te': "నమస్కారం! నేను మీ AI న్యాయ సహాయకుడను. మీ హక్కులను అర్థం చేసుకోవడంలో మరియు న్యాయ మార్గదర్శకత్వం అందించడంలో సహాయం చేయడానికి నేను ఇక్కడ ఉన్నాను. ఈరోజు నేను మీకు ఏ న్యాయ ప్రశ్నలో సహాయం చేయగలను?",
-      'bn': "নমস্কার! আমি আপনার AI আইনি সহায়ক। আমি এখানে আপনার অধিকারগুলি বুঝতে এবং আইনি নির্দেশনা প্রদান করতে সাহায্য করার জন্য আছি। আজ আমি আপনাকে কোন আইনি প্রশ্নে সাহায্য করতে পারি?",
-      'kn': "ನಮಸ್ಕಾರ! ನಾನು ನಿಮ್ಮ AI ಕಾನೂನು ಸಹಾಯಕ. ನಿಮ್ಮ ಹಕ್ಕುಗಳನ್ನು ಅರ್ಥಮಾಡಿಕೊಳ್ಳಲು ಮತ್ತು ಕಾನೂನು ಮಾರ್ಗದರ್ಶನ ನೀಡಲು ನಾನು ಇಲ್ಲಿದ್ದೇನೆ. ಇಂದು ನಾನು ನಿಮಗೆ ಯಾವ ಕಾನೂನು ಪ್ರಶ್ನೆಯಲ್ಲಿ ಸಹಾಯ ಮಾಡಬಹುದು?",
-      'mr': "नमस्कार! मी तुमचा AI कायदेशीर सहाय्यक आहे. तुमचे अधिकार समजून घेण्यासाठी आणि कायदेशीर मार्गदर्शन प्रदान करण्यासाठी मी येथे आहे. आज मी तुम्हाला कोणत्या कायदेशीर प्रश्नात मदत करू शकतो?",
-      'gu': "નમસ્તે! હું તમારો AI કાનૂની સહાયક છું. તમારા અધિકારોને સમજવામાં અને કાનૂની માર્ગદર્શન પ્રદાન કરવામાં મદદ કરવા માટે હું અહીં છું. આજે હું તમને કયા કાનૂની પ્રશ્નમાં મદદ કરી શકું?",
-      'pa': "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ ਤੁਹਾਡਾ AI ਕਾਨੂੰਨੀ ਸਹਾਇਕ ਹਾਂ। ਮੈਂ ਤੁਹਾਡੇ ਅਧਿਕਾਰਾਂ ਨੂੰ ਸਮਝਣ ਅਤੇ ਕਾਨੂੰਨੀ ਮਾਰਗਦਰਸ਼ਨ ਪ੍ਰਦਾਨ ਕਰਨ ਲਈ ਇੱਥੇ ਹਾਂ। ਅੱਜ ਮੈਂ ਤੁਹਾਡੀ ਕਿਸ ਕਾਨੂੰਨੀ ਸਮੱਸਿਆ ਵਿੱਚ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ?",
-      'ur': "السلام علیکم! میں آپ کا AI قانونی معاون ہوں۔ میں یہاں آپ کے حقوق کو سمجھنے اور قانونی رہنمائی فراہم کرنے کے لیے ہوں۔ آج میں آپ کے کس قانونی سوال میں مدد کر سکتا ہوں؟"
+      'en': "Hello! I'm Vakeel Saab AI, your legal assistant powered by advanced AI. I'm here to help you understand your rights and provide legal guidance. What legal question can I help you with today?",
+      'hi': "नमस्ते! मैं वकील साब AI हूं, उन्नत AI द्वारा संचालित आपका कानूनी सहायक। मैं यहां आपके अधिकारों को समझने और कानूनी मार्गदर्शन प्रदान करने के लिए हूं। आज मैं आपकी किस कानूनी समस्या में मदद कर सकता हूं?",
+      'ta': "வணக்கம்! நான் வகீல் சாப் AI, மேம்பட்ட AI ஆல் இயக்கப்படும் உங்கள் சட்ட உதவியாளர். உங்கள் உரிமைகளைப் புரிந்துகொள்ளவும் சட்ட வழிகாட்டுதலை வழங்கவும் நான் இங்கே இருக்கிறேன். இன்று நான் உங்களுக்கு எந்த சட்டக் கேள்வியில் உதவ முடியும்?",
+      'te': "నమస్కారం! నేను వకీల్ సాబ్ AI, అధునాతన AI చే శక్తివంతం చేయబడిన మీ న్యాయ సహాయకుడను. మీ హక్కులను అర్థం చేసుకోవడంలో మరియు న్యాయ మార్గదర్శకత్వం అందించడంలో సహాయం చేయడానికి నేను ఇక్కడ ఉన్నాను। ఈరోజు నేను మీకు ఏ న్యాయ ప్రశ్నలో సహాయం చేయగలను?",
+      'bn': "নমস্কার! আমি ভকিল সাহেব AI, উন্নত AI দ্বারা চালিত আপনার আইনি সহায়ক। আমি এখানে আপনার অধিকারগুলি বুঝতে এবং আইনি নির্দেশনা প্রদান করতে সাহায্য করার জন্য আছি। আজ আমি আপনাকে কোন আইনি প্রশ্নে সাহায্য করতে পারি?",
+      'kn': "ನಮಸ್ಕಾರ! ನಾನು ವಕೀಲ್ ಸಾಬ್ AI, ಸುಧಾರಿತ AI ಯಿಂದ ಚಾಲಿತ ನಿಮ್ಮ ಕಾನೂನು ಸಹಾಯಕ. ನಿಮ್ಮ ಹಕ್ಕುಗಳನ್ನು ಅರ್ಥಮಾಡಿಕೊಳ್ಳಲು ಮತ್ತು ಕಾನೂನು ಮಾರ್ಗದರ್ಶನ ನೀಡಲು ನಾನು ಇಲ್ಲಿದ್ದೇನೆ. ಇಂದು ನಾನು ನಿಮಗೆ ಯಾವ ಕಾನೂನು ಪ್ರಶ್ನೆಯಲ್ಲಿ ಸಹಾಯ ಮಾಡಬಹುದು?",
+      'mr': "नमस्कार! मी वकील साहेब AI आहे, प्रगत AI द्वारे चालवलेला तुमचा कायदेशीर सहाय्यक. तुमचे अधिकार समजून घेण्यासाठी आणि कायदेशीर मार्गदर्शन प्रदान करण्यासाठी मी येथे आहे. आज मी तुम्हाला कोणत्या कायदेशीर प्रश्नात मदत करू शकतो?",
+      'gu': "નમસ્તે! હું વકીલ સાહેબ AI છું, અદ્યતન AI દ્વારા સંચાલિત તમારો કાનૂની સહાયક. તમારા અધિકારોને સમજવામાં અને કાનૂની માર્ગદર્શન પ્રદાન કરવામાં મદદ કરવા માટે હું અહીં છું. આજે હું તમને કયા કાનૂની પ્રશ્નમાં મદદ કરી શકું?",
+      'pa': "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ ਵਕੀਲ ਸਾਹਿਬ AI ਹਾਂ, ਉੱਨਤ AI ਦੁਆਰਾ ਸੰਚਾਲਿਤ ਤੁਹਾਡਾ ਕਾਨੂੰਨੀ ਸਹਾਇਕ। ਮੈਂ ਤੁਹਾਡੇ ਅਧਿਕਾਰਾਂ ਨੂੰ ਸਮਝਣ ਅਤੇ ਕਾਨੂੰਨੀ ਮਾਰਗਦਰਸ਼ਨ ਪ੍ਰਦਾਨ ਕਰਨ ਲਈ ਇੱਥੇ ਹਾਂ। ਅੱਜ ਮੈਂ ਤੁਹਾਡੀ ਕਿਸ ਕਾਨੂੰਨੀ ਸਮੱਸਿਆ ਵਿੱਚ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ?",
+      'ur': "السلام علیکم! میں وکیل صاحب AI ہوں، جدید AI کے ذریعے چلنے والا آپ کا قانونی معاون۔ میں یہاں آپ کے حقوق کو سمجھنے اور قانونی رہنمائی فراہم کرنے کے لیے ہوں۔ آج میں آپ کے کس قانونی سوال میں مدد کر سکتا ہوں؟"
     };
     
     return welcomeMessages[languageCode] || welcomeMessages['en'];
@@ -157,78 +163,77 @@ const ChatPage: React.FC = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = inputValue;
     setInputValue('');
     setIsTyping(true);
 
-    // Use requestAnimationFrame for better performance instead of setTimeout
-    const startTime = performance.now();
-    const checkTime = () => {
-      if (performance.now() - startTime >= 1500) {
-        const botResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          type: 'bot',
-          content: generateBotResponse(inputValue, selectedLanguage.code),
-          timestamp: new Date(),
-          language: selectedLanguage.code
-        };
-        setMessages(prev => [...prev, botResponse]);
-        setIsTyping(false);
-      } else {
-        requestAnimationFrame(checkTime);
-      }
-    };
-    requestAnimationFrame(checkTime);
-  };
+    try {
+      // Generate AI response using Gemini
+      const aiResponse = await geminiService.generateResponse(
+        currentInput,
+        selectedLanguage.code,
+        conversationHistory
+      );
 
-  const generateBotResponse = (userInput: string, languageCode: string): string => {
-    const input = userInput.toLowerCase();
-    
-    // Response templates for different languages
-    const responses: { [key: string]: { [key: string]: string } } = {
-      'en': {
-        employment: "I understand you have an employment-related question. Employment law can be complex, but I'm here to help. In general, most employment in the US is 'at-will,' but there are important protections against discrimination, wrongful termination, and violations of labor laws. Could you provide more specific details about your situation so I can give you more targeted guidance?",
-        housing: "Housing and tenant rights are crucial protections. Landlord-tenant laws vary significantly by state and locality, but generally include protections around rent increases, eviction procedures, habitability standards, and security deposits. What specific housing issue are you facing? This will help me provide more relevant information about your rights.",
-        contract: "Contract law governs agreements between parties. For a contract to be valid, it typically needs offer, acceptance, consideration, and mutual consent. If you're having issues with a contract, I can help you understand your rights and potential remedies. What type of contract are you dealing with, and what specific concerns do you have?",
-        family: "Family law matters can be emotionally challenging. Whether dealing with divorce, child custody, support issues, or other family legal matters, it's important to understand your rights and options. Each state has different laws governing family matters. What specific family law issue can I help you understand better?",
-        injury: "Personal injury law covers situations where you've been harmed due to someone else's negligence or intentional actions. This can include car accidents, slip and falls, medical malpractice, and more. The key factors are typically duty of care, breach of that duty, causation, and damages. Can you tell me more about the circumstances of your situation?",
-        default: "Thank you for your question. I'm here to help you understand your legal rights and options. Legal matters can be complex, and while I can provide general information, it's always advisable to consult with a qualified attorney for specific legal advice. Could you provide more details about your situation so I can offer more targeted guidance? You can also ask me about employment law, housing rights, contracts, family law, personal injury, or any other legal topic."
-      },
-      'hi': {
-        employment: "मैं समझता हूं कि आपका रोजगार संबंधी प्रश्न है। रोजगार कानून जटिल हो सकता है, लेकिन मैं मदद के लिए यहां हूं। सामान्यतः, अमेरिका में अधिकांश रोजगार 'इच्छानुसार' है, लेकिन भेदभाव, गलत तरीके से बर्खास्तगी, और श्रम कानूनों के उल्लंघन के खिलाफ महत्वपूर्ण सुरक्षा है। क्या आप अपनी स्थिति के बारे में अधिक विशिष्ट विवरण दे सकते हैं ताकि मैं आपको अधिक लक्षित मार्गदर्शन दे सकूं?",
-        housing: "आवास और किरायेदार अधिकार महत्वपूर्ण सुरक्षा हैं। मकान मालिक-किरायेदार कानून राज्य और स्थानीयता के अनुसार काफी भिन्न होते हैं, लेकिन आम तौर पर किराया वृद्धि, बेदखली प्रक्रियाओं, रहने योग्यता मानकों, और सिक्यूरिटी डिपॉजिट के आसपास सुरक्षा शामिल है। आप किस विशिष्ट आवास समस्या का सामना कर रहे हैं? इससे मुझे आपके अधिकारों के बारे में अधिक प्रासंगिक जानकारी प्रदान करने में मदद मिलेगी।",
-        default: "आपके प्रश्न के लिए धन्यवाद। मैं आपके कानूनी अधिकारों और विकल्पों को समझने में आपकी मदद करने के लिए यहां हूं। कानूनी मामले जटिल हो सकते हैं, और जबकि मैं सामान्य जानकारी प्रदान कर सकता हूं, विशिष्ट कानूनी सलाह के लिए हमेशा एक योग्य वकील से सलाह लेना उचित है। क्या आप अपनी स्थिति के बारे में अधिक विवरण दे सकते हैं ताकि मैं अधिक लक्षित मार्गदर्शन दे सकूं?"
-      },
-      'ta': {
-        employment: "உங்களுக்கு வேலைவாய்ப்பு தொடர்பான கேள்வி இருப்பதை நான் புரிந்துகொள்கிறேன். வேலைவாய்ப்பு சட்டம் சிக்கலானதாக இருக்கலாம், ஆனால் நான் உதவ இங்கே இருக்கிறேன். பொதுவாக, அமெரிக்காவில் பெரும்பாலான வேலைவாய்ப்புகள் 'விருப்பப்படி' உள்ளன, ஆனால் பாகுபாடு, தவறான பணிநீக்கம் மற்றும் தொழிலாளர் சட்ட மீறல்களுக்கு எதிராக முக்கியமான பாதுகாப்புகள் உள்ளன। நான் உங்களுக்கு மிகவும் இலக்கு வைத்த வழிகாட்டுதலை வழங்க முடியும் என்பதற்காக உங்கள் நிலைமை பற்றி மிகவும் குறிப்பிட்ட விவரங்களை வழங்க முடியுமா?",
-        default: "உங்கள் கேள்விக்கு நன்றி. உங்கள் சட்ட உரிமைகள் மற்றும் விருப்பங்களைப் புரிந்துகொள்ள உதவ நான் இங்கே இருக்கிறேன். சட்ட விஷயங்கள் சிக்கலானதாக இருக்கலாம், நான் பொதுவான தகவல்களை வழங்க முடியும் என்றாலும், குறிப்பிட்ட சட்ட ஆலோசனைக்கு எப்போதும் தகுதியான வழக்கறிஞரை அணுகுவது நல்லது. நான் மிகவும் இலக்கு வைத்த வழிகாட்டுதலை வழங்க முடியும் என்பதற்காக உங்கள் நிலைமை பற்றி மேலும் விவரங்களை வழங்க முடியுமா?"
-      }
-    };
+      // Update conversation history for context
+      const newHistory: GeminiChatMessage[] = [
+        ...conversationHistory,
+        {
+          role: 'user',
+          parts: [{ text: currentInput }]
+        },
+        {
+          role: 'model',
+          parts: [{ text: aiResponse }]
+        }
+      ];
+      setConversationHistory(newHistory);
 
-    const langResponses = responses[languageCode] || responses['en'];
-    
-    if (input.includes('employment') || input.includes('job') || input.includes('work') || input.includes('fired')) {
-      return langResponses.employment || langResponses.default;
-    } else if (input.includes('rent') || input.includes('landlord') || input.includes('tenant') || input.includes('eviction')) {
-      return langResponses.housing || langResponses.default;
-    } else if (input.includes('contract') || input.includes('agreement')) {
-      return langResponses.contract || langResponses.default;
-    } else if (input.includes('divorce') || input.includes('custody') || input.includes('family')) {
-      return langResponses.family || langResponses.default;
-    } else if (input.includes('accident') || input.includes('injury') || input.includes('insurance')) {
-      return langResponses.injury || langResponses.default;
-    } else {
-      return langResponses.default;
+      const botResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'bot',
+        content: aiResponse,
+        timestamp: new Date(),
+        language: selectedLanguage.code
+      };
+
+      setMessages(prev => [...prev, botResponse]);
+    } catch (error) {
+      console.error('Error generating AI response:', error);
+      
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'bot',
+        content: getErrorMessage(selectedLanguage.code),
+        timestamp: new Date(),
+        language: selectedLanguage.code,
+        isError: true
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const getErrorMessage = (languageCode: string): string => {
+    const errorMessages: { [key: string]: string } = {
+      'en': "I apologize, but I'm experiencing technical difficulties right now. Please try again in a moment, or contact our support team for immediate assistance. For urgent legal matters, please call our 24/7 hotline at 1-800-LEGAL-HELP.",
+      'hi': "मुझे खुशी है, लेकिन मैं अभी तकनीकी कठिनाइयों का सामना कर रहा हूं। कृपया एक क्षण में फिर से कोशिश करें, या तत्काल सहायता के लिए हमारी सहायता टीम से संपर्क करें।",
+      'ta': "மன்னிக்கவும், நான் இப்போது தொழில்நுட்ப சிக்கல்களை எதிர்கொள்கிறேன். தயவுசெய்து ஒரு கணம் மீண்டும் முயற்சிக்கவும் அல்லது உடனடி உதவிக்கு எங்கள் ஆதரவு குழுவைத் தொடர்பு கொள்ளவும்."
+    };
+    
+    return errorMessages[languageCode] || errorMessages['en'];
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
     // Mark that user has interacted
     setHasUserInteracted(true);
 
-    Array.from(files).forEach(file => {
+    Array.from(files).forEach(async (file) => {
       const attachment: FileAttachment = {
         id: Date.now().toString(),
         name: file.name,
@@ -246,40 +251,46 @@ const ChatPage: React.FC = () => {
       };
 
       setMessages(prev => [...prev, message]);
+      setIsTyping(true);
 
-      // Simulate bot response to file upload using requestAnimationFrame
-      const startTime = performance.now();
-      const checkTime = () => {
-        if (performance.now() - startTime >= 1000) {
-          const botResponse: Message = {
-            id: (Date.now() + 1).toString(),
-            type: 'bot',
-            content: generateFileUploadResponse(file.name, selectedLanguage.code),
-            timestamp: new Date(),
-            language: selectedLanguage.code
-          };
-          setMessages(prev => [...prev, botResponse]);
-        } else {
-          requestAnimationFrame(checkTime);
-        }
-      };
-      requestAnimationFrame(checkTime);
+      try {
+        // Generate AI response for file upload
+        const aiResponse = await geminiService.generateFileAnalysisResponse(
+          file.name,
+          selectedLanguage.code
+        );
+
+        const botResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          type: 'bot',
+          content: aiResponse,
+          timestamp: new Date(),
+          language: selectedLanguage.code
+        };
+
+        setMessages(prev => [...prev, botResponse]);
+      } catch (error) {
+        console.error('Error generating file analysis response:', error);
+        
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          type: 'bot',
+          content: getErrorMessage(selectedLanguage.code),
+          timestamp: new Date(),
+          language: selectedLanguage.code,
+          isError: true
+        };
+
+        setMessages(prev => [...prev, errorMessage]);
+      } finally {
+        setIsTyping(false);
+      }
     });
 
     // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
-
-  const generateFileUploadResponse = (fileName: string, languageCode: string): string => {
-    const responses: { [key: string]: string } = {
-      'en': `I've received your document "${fileName}". While I can see that you've uploaded a file, I recommend having important legal documents reviewed by a qualified attorney who can provide specific advice based on the document's contents. Is there anything specific about this document you'd like me to help explain in general terms?`,
-      'hi': `मैंने आपका दस्तावेज़ "${fileName}" प्राप्त किया है। जबकि मैं देख सकता हूं कि आपने एक फ़ाइल अपलोड की है, मैं सुझाता हूं कि महत्वपूर्ण कानूनी दस्तावेज़ों की समीक्षा एक योग्य वकील से कराएं जो दस्तावेज़ की सामग्री के आधार पर विशिष्ट सलाह दे सकता है। क्या इस दस्तावेज़ के बारे में कुछ विशिष्ट है जिसे मैं सामान्य शब्दों में समझाने में मदद कर सकता हूं?`,
-      'ta': `நான் உங்கள் ஆவணம் "${fileName}" ஐ பெற்றுள்ளேன். நீங்கள் ஒரு கோப்பை பதிவேற்றியுள்ளீர்கள் என்பதை நான் பார்க்க முடிந்தாலும், முக்கியமான சட்ட ஆவணங்களை ஒரு தகுதியான வழக்கறிஞரால் மதிப்பாய்வு செய்ய பரிந்துரைக்கிறேன், அவர் ஆவணத்தின் உள்ளடக்கத்தின் அடிப்படையில் குறிப்பிட்ட ஆலோசனை வழங்க முடியும். இந்த ஆவணத்தைப் பற்றி ஏதேனும் குறிப்பிட்ட விஷயம் உள்ளதா, அதை நான் பொதுவான சொற்களில் விளக்க உதவ முடியுமா?`
-    };
-    
-    return responses[languageCode] || responses['en'];
   };
 
   const startRecording = async () => {
@@ -348,6 +359,7 @@ const ChatPage: React.FC = () => {
     setCurrentSessionId(session.id);
     setIsHistoryOpen(false);
     setHasUserInteracted(true); // Allow scrolling for loaded sessions
+    setConversationHistory([]); // Reset conversation history for loaded session
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -377,8 +389,8 @@ const ChatPage: React.FC = () => {
                   <Bot className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-black">AI Legal Assistant</h1>
-                  <p className="text-gray-600">Get instant legal guidance and understand your rights</p>
+                  <h1 className="text-2xl font-bold text-black">Vakeel Saab AI</h1>
+                  <p className="text-gray-600">Powered by Gemini AI - Get instant legal guidance</p>
                   <div className="flex items-center space-x-2 mt-1">
                     <span className="text-sm text-gray-500">Language:</span>
                     <span className="text-sm font-medium" style={{ color: '#B88271' }}>
@@ -449,10 +461,14 @@ const ChatPage: React.FC = () => {
                     <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${
                       message.type === 'user' 
                         ? 'bg-[#B88271]' 
+                        : message.isError
+                        ? 'bg-red-100'
                         : 'bg-gray-100'
                     }`}>
                       {message.type === 'user' ? (
                         <User className="h-6 w-6 text-white" />
+                      ) : message.isError ? (
+                        <AlertCircle className="h-6 w-6 text-red-600" />
                       ) : (
                         <Bot className="h-6 w-6 text-gray-600" />
                       )}
@@ -461,9 +477,11 @@ const ChatPage: React.FC = () => {
                     <div className={`rounded-2xl p-6 text-lg leading-relaxed ${
                       message.type === 'user'
                         ? 'bg-[#B88271] text-white'
+                        : message.isError
+                        ? 'bg-red-50 text-red-800 border border-red-200'
                         : 'bg-gray-100 text-gray-800'
                     }`}>
-                      <p className="leading-relaxed">{message.content}</p>
+                      <p className="leading-relaxed whitespace-pre-wrap">{message.content}</p>
                       
                       {message.attachments && (
                         <div className="mt-4 space-y-3">
@@ -550,14 +568,15 @@ const ChatPage: React.FC = () => {
                 type="text"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
                 placeholder="Ask me about your legal rights..."
                 className="flex-1 px-6 py-4 text-lg border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent"
+                disabled={isTyping}
               />
               
               <button
                 onClick={handleSendMessage}
-                disabled={!inputValue.trim()}
+                disabled={!inputValue.trim() || isTyping}
                 className="flex-shrink-0 p-4 bg-[#B88271] text-white rounded-xl hover:bg-[#a86f5e] transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="h-6 w-6" />
@@ -565,7 +584,7 @@ const ChatPage: React.FC = () => {
             </div>
             
             <p className="text-sm text-gray-500 mt-3 text-center">
-              This AI assistant provides general legal information in {selectedLanguage.nativeName}. For specific legal advice, consult with a qualified attorney.
+              Powered by Gemini AI • This assistant provides general legal information in {selectedLanguage.nativeName}. For specific legal advice, consult with a qualified attorney.
             </p>
           </div>
         </AnimatedSection>
