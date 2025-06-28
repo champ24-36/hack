@@ -30,11 +30,11 @@ const LoginPage: React.FC = () => {
     // Store the selected language in session storage for immediate use
     sessionStorage.setItem('chatLanguage', selectedLanguage.code);
 
-    const success = await login(email, password);
+    const { success, error: loginError } = await login(email, password);
     if (success) {
       navigate('/dashboard');
     } else {
-      setError('Invalid email or password');
+      setError(loginError || 'An unexpected error occurred. Please try again.');
     }
   };
 
