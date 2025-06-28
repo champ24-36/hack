@@ -8,3 +8,15 @@ Build Tool: Vite
 Linting: ESLint with TypeScript and React-specific plugins
 Icons: Lucide React
 AI Integration: Google Gemini API
+
+Security
+Enable RLS on all tables
+Add policies for authenticated users to manage their own data
+Add policies for lawyers to access their consultation data
+
+Features
+Multi-language support
+File attachments
+Consultation scheduling
+Chat history
+Document management
