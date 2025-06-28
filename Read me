@@ -1,0 +1,10 @@
+Based on the project files provided, the current tech stack for this application is:
+
+Frontend Framework: React
+Language: TypeScript
+Routing: React Router DOM
+Styling: Tailwind CSS with PostCSS and Autoprefixer
+Build Tool: Vite
+Linting: ESLint with TypeScript and React-specific plugins
+Icons: Lucide React
+AI Integration: Google Gemini API
