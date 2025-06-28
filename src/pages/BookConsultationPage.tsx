@@ -1,69 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Video from 'lucide-react/dist/esm/icons/video';
 import Phone from 'lucide-react/dist/esm/icons/phone';
 import MessageSquare from 'lucide-react/dist/esm/icons/message-square';
 import CheckCircle from 'lucide-react/dist/esm/icons/check-circle';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import useAuth from '../contexts/useAuth';
+import { ConsultationService } from '../services/consultationService';
+import type { Database } from '../types/database';
+
+type Lawyer = Database['public']['Tables']['lawyers']['Row'];
+type LegalCategory = Database['public']['Tables']['legal_categories']['Row'];
 
 const BookConsultationPage: React.FC = () => {
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
+  const [lawyers, setLawyers] = useState<Lawyer[]>([]);
+  const [categories, setCategories] = useState<LegalCategory[]>([]);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     category: '',
     description: '',
-    urgency: '',
+    urgency: 'normal' as Database['public']['Enums']['urgency_level'],
     preferredDate: '',
     preferredTime: '',
-    consultationType: '',
+    consultationType: '' as Database['public']['Enums']['consultation_type'],
     lawyer: '',
     contactMethod: 'email'
   });
 
-  const categories = [
-    { id: 'employment', name: 'Employment Law', description: 'Workplace rights, discrimination, contracts' },
-    { id: 'housing', name: 'Housing & Tenant Rights', description: 'Landlord disputes, evictions, lease issues' },
-    { id: 'family', name: 'Family Law', description: 'Divorce, custody, domestic relations' },
-    { id: 'business', name: 'Business Law', description: 'Contracts, partnerships, compliance' },
-    { id: 'personal', name: 'Personal Injury', description: 'Accidents, medical malpractice, compensation' },
-    { id: 'criminal', name: 'Criminal Defense', description: 'Criminal charges, legal representation' },
-    { id: 'immigration', name: 'Immigration', description: 'Visas, citizenship, deportation defense' },
-    { id: 'other', name: 'Other Legal Matters', description: 'General legal questions and advice' }
-  ];
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      const [lawyersData, categoriesData] = await Promise.all([
+        ConsultationService.getLawyers(),
+        ConsultationService.getLegalCategories()
+      ]);
+      
+      setLawyers(lawyersData);
+      setCategories(categoriesData);
+      setLoading(false);
+    };
 
-  const lawyers = [
-    {
-      id: 'sarah',
-      name: 'Sarah Johnson, Esq.',
-      specialties: ['Employment Law', 'Business Law'],
-      rating: 4.9,
-      experience: '12 years',
-      image: 'https://images.pexels.com/photos/2182970/pexels-photo-2182970.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=1'
-    },
-    {
-      id: 'michael',
-      name: 'Michael Chen, Esq.',
-      specialties: ['Family Law', 'Personal Injury'],
-      rating: 4.8,
-      experience: '15 years',
-      image: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=1'
-    },
-    {
-      id: 'emily',
-      name: 'Emily Rodriguez, Esq.',
-      specialties: ['Housing Law', 'Immigration'],
-      rating: 4.9,
-      experience: '10 years',
-      image: 'https://images.pexels.com/photos/3756679/pexels-photo-3756679.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=1'
-    },
-    {
-      id: 'david',
-      name: 'David Wilson, Esq.',
-      specialties: ['Criminal Defense', 'Business Law'],
-      rating: 4.7,
-      experience: '18 years',
-      image: 'https://images.pexels.com/photos/2182970/pexels-photo-2182970.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=1'
-    }
-  ];
+    loadData();
+  }, []);
 
   const timeSlots = [
     '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
@@ -82,11 +62,67 @@ const BookConsultationPage: React.FC = () => {
     setStep(step - 1);
   };
 
-  const handleSubmit = () => {
-    // Handle form submission
-    console.log('Booking consultation:', formData);
-    setStep(5); // Show confirmation
+  const handleSubmit = async () => {
+    if (!user) return;
+
+    const selectedCategory = categories.find(c => c.name.toLowerCase().includes(formData.category));
+    const selectedLawyer = lawyers.find(l => l.id === formData.lawyer);
+
+    const consultationData = {
+      user_id: user.id,
+      lawyer_id: formData.lawyer,
+      category_id: selectedCategory?.id || null,
+      title: `${selectedCategory?.name || 'Legal'} Consultation`,
+      description: formData.description,
+      consultation_type: formData.consultationType,
+      urgency: formData.urgency,
+      scheduled_date: formData.preferredDate,
+      scheduled_time: formData.preferredTime,
+      duration_minutes: 60,
+      status: 'scheduled' as Database['public']['Enums']['consultation_status']
+    };
+
+    const result = await ConsultationService.createConsultation(consultationData);
+    
+    if (result) {
+      setStep(5); // Show confirmation
+    } else {
+      alert('Failed to book consultation. Please try again.');
+    }
   };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-black mb-4">Please Sign In</h2>
+            <p className="text-gray-600 mb-6">You need to be signed in to book a consultation.</p>
+            <a href="/login" className="bg-[#B88271] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#a86f5e] transition-all shadow-lg">
+              Sign In
+            </a>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#B88271] mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading consultation options...</p>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   const renderStep1 = () => (
     <div className="space-y-6">
@@ -99,9 +135,9 @@ const BookConsultationPage: React.FC = () => {
         {categories.map((category) => (
           <button
             key={category.id}
-            onClick={() => handleInputChange('category', category.id)}
+            onClick={() => handleInputChange('category', category.name.toLowerCase())}
             className={`p-4 rounded-lg border-2 text-left transition-all ${
-              formData.category === category.id
+              formData.category === category.name.toLowerCase()
                 ? 'border-[#B88271] bg-[#f2e8e5]'
                 : 'border-gray-200 hover:border-[#B88271]'
             }`}
@@ -261,16 +297,16 @@ const BookConsultationPage: React.FC = () => {
               >
                 <div className="flex items-center space-x-3">
                   <img
-                    src={lawyer.image}
+                    src={lawyer.avatar_url || `https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=1`}
                     alt={lawyer.name}
                     className="w-12 h-12 rounded-full object-cover"
                   />
                   <div className="flex-1">
                     <h3 className="font-semibold text-black">{lawyer.name}</h3>
-                    <p className="text-sm text-gray-600">{lawyer.specialties.join(', ')}</p>
+                    <p className="text-sm text-gray-600">{lawyer.specialties?.join(', ')}</p>
                     <div className="flex items-center space-x-2 mt-1">
                       <span className="text-sm" style={{ color: '#B88271' }}>★ {lawyer.rating}</span>
-                      <span className="text-sm text-gray-500">• {lawyer.experience}</span>
+                      <span className="text-sm text-gray-500">• {lawyer.experience_years} years</span>
                     </div>
                   </div>
                 </div>
@@ -282,38 +318,60 @@ const BookConsultationPage: React.FC = () => {
     </div>
   );
 
-  const renderStep5 = () => (
-    <div className="text-center space-y-6">
-      <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
-        <CheckCircle className="h-8 w-8 text-green-600" />
-      </div>
-      <div>
-        <h2 className="text-2xl font-bold text-black mb-4">Consultation Booked Successfully!</h2>
-        <p className="text-gray-600 mb-6">
-          Your consultation has been scheduled. You'll receive a confirmation email with all the details.
-        </p>
-      </div>
+  const renderStep5 = () => {
+    const selectedLawyer = lawyers.find(l => l.id === formData.lawyer);
+    
+    return (
+      <div className="text-center space-y-6">
+        <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
+          <CheckCircle className="h-8 w-8 text-green-600" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold text-black mb-4">Consultation Booked Successfully!</h2>
+          <p className="text-gray-600 mb-6">
+            Your consultation has been scheduled. You'll receive a confirmation email with all the details.
+          </p>
+        </div>
 
-      <div className="bg-gray-50 rounded-lg p-6 text-left max-w-md mx-auto">
-        <h3 className="font-semibold text-black mb-4">Consultation Details:</h3>
-        <div className="space-y-2 text-sm">
-          <p><span className="font-medium">Date:</span> {formData.preferredDate}</p>
-          <p><span className="font-medium">Time:</span> {formData.preferredTime}</p>
-          <p><span className="font-medium">Type:</span> {formData.consultationType} consultation</p>
-          <p><span className="font-medium">Attorney:</span> {lawyers.find(l => l.id === formData.lawyer)?.name}</p>
+        <div className="bg-gray-50 rounded-lg p-6 text-left max-w-md mx-auto">
+          <h3 className="font-semibold text-black mb-4">Consultation Details:</h3>
+          <div className="space-y-2 text-sm">
+            <p><span className="font-medium">Date:</span> {formData.preferredDate}</p>
+            <p><span className="font-medium">Time:</span> {formData.preferredTime}</p>
+            <p><span className="font-medium">Type:</span> {formData.consultationType} consultation</p>
+            <p><span className="font-medium">Attorney:</span> {selectedLawyer?.name}</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <a 
+            href="/dashboard"
+            className="bg-[#B88271] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#a86f5e] transition-all shadow-lg"
+          >
+            View Dashboard
+          </a>
+          <button 
+            onClick={() => {
+              setStep(1);
+              setFormData({
+                category: '',
+                description: '',
+                urgency: 'normal',
+                preferredDate: '',
+                preferredTime: '',
+                consultationType: '' as any,
+                lawyer: '',
+                contactMethod: 'email'
+              });
+            }}
+            className="border border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+          >
+            Book Another Consultation
+          </button>
         </div>
       </div>
-
-      <div className="flex flex-col sm:flex-row gap-4 justify-center">
-        <button className="bg-[#B88271] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#a86f5e] transition-all shadow-lg">
-          View Dashboard
-        </button>
-        <button className="border border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors">
-          Book Another Consultation
-        </button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">

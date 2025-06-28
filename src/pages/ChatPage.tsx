@@ -16,8 +16,14 @@ import Header from '../components/Header';
 import AnimatedSection from '../components/AnimatedSection';
 import LanguageSelector from '../components/LanguageSelector';
 import useLanguage from '../contexts/useLanguage';
+import useAuth from '../contexts/useAuth';
 import { SUPPORTED_LANGUAGES, type Language } from '../contexts/languageData';
 import { geminiService, type ChatMessage as GeminiChatMessage } from '../services/geminiService';
+import { ChatService } from '../services/chatService';
+import type { Database } from '../types/database';
+
+type ChatSession = Database['public']['Tables']['chat_sessions']['Row'];
+type ChatMessage = Database['public']['Tables']['chat_messages']['Row'];
 
 interface Message {
   id: string;
@@ -37,23 +43,16 @@ interface FileAttachment {
   url: string;
 }
 
-interface ChatSession {
-  id: string;
-  title: string;
-  timestamp: Date;
-  messages: Message[];
-  language: string;
-}
-
 const ChatPage: React.FC = () => {
   const { selectedLanguage } = useLanguage();
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState('current');
+  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<GeminiChatMessage[]>([]);
@@ -62,82 +61,60 @@ const ChatPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
-  // Initialize with welcome message in selected language
+  // Initialize with welcome message and create session
   useEffect(() => {
-    const welcomeMessage = getWelcomeMessage(selectedLanguage.code);
-    setMessages([{
-      id: '1',
-      type: 'bot',
-      content: welcomeMessage,
-      timestamp: new Date(),
-      language: selectedLanguage.code
-    }]);
-    // Reset conversation history when language changes
-    setConversationHistory([]);
-  }, [selectedLanguage]);
+    const initializeChat = async () => {
+      if (!user) return;
 
-  // Only auto-scroll after user has sent their first message
+      const welcomeMessage = getWelcomeMessage(selectedLanguage.code);
+      setMessages([{
+        id: '1',
+        type: 'bot',
+        content: welcomeMessage,
+        timestamp: new Date(),
+        language: selectedLanguage.code
+      }]);
+
+      // Create a new chat session
+      const session = await ChatService.createSession(
+        user.id, 
+        selectedLanguage.code, 
+        'New Chat Session'
+      );
+      
+      if (session) {
+        setCurrentSession(session);
+        // Save welcome message to database
+        await ChatService.saveMessage(
+          session.id,
+          'assistant',
+          welcomeMessage,
+          selectedLanguage.code
+        );
+      }
+
+      // Load user's chat sessions
+      const sessions = await ChatService.getUserSessions(user.id);
+      setChatSessions(sessions);
+    };
+
+    initializeChat();
+    setConversationHistory([]);
+  }, [selectedLanguage, user]);
+
+  // Auto-scroll after user interaction
   useEffect(() => {
     if (hasUserInteracted) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, hasUserInteracted]);
 
-  // Initialize with some sample chat history
-  useEffect(() => {
-    const sampleSessions: ChatSession[] = [
-      {
-        id: 'session-1',
-        title: 'Employment Rights Question',
-        timestamp: new Date(Date.now() - 86400000), // 1 day ago
-        language: 'en',
-        messages: [
-          {
-            id: '1',
-            type: 'user',
-            content: 'Can my employer fire me without notice?',
-            timestamp: new Date(Date.now() - 86400000)
-          },
-          {
-            id: '2',
-            type: 'bot',
-            content: 'Employment termination laws vary by state, but generally, most employment in the US is "at-will," meaning either party can end the relationship at any time. However, there are important exceptions...',
-            timestamp: new Date(Date.now() - 86400000),
-            language: 'en'
-          }
-        ]
-      },
-      {
-        id: 'session-2',
-        title: 'Tenant Rights Inquiry',
-        timestamp: new Date(Date.now() - 172800000), // 2 days ago
-        language: 'hi',
-        messages: [
-          {
-            id: '1',
-            type: 'user',
-            content: 'My landlord wants to increase my rent by 50%. Is this legal?',
-            timestamp: new Date(Date.now() - 172800000)
-          },
-          {
-            id: '2',
-            type: 'bot',
-            content: 'किराया वृद्धि कानून आपके स्थान और पट्टे की शर्तों पर निर्भर करते हैं। अधिकांश क्षेत्रों में, मकान मालिकों को उचित नोटिस देना होगा और स्थानीय किराया नियंत्रण अध्यादेशों का पालन करना होगा...',
-            timestamp: new Date(Date.now() - 172800000),
-            language: 'hi'
-          }
-        ]
-      }
-    ];
-    setChatSessions(sampleSessions);
-  }, []);
-
   const getWelcomeMessage = (languageCode: string): string => {
     const welcomeMessages: { [key: string]: string } = {
       'en': "Hello! I'm Vakeel Saab AI, your legal assistant powered by advanced AI. I'm here to help you understand your rights and provide legal guidance. What legal question can I help you with today?",
       'hi': "नमस्ते! मैं वकील साब AI हूं, उन्नत AI द्वारा संचालित आपका कानूनी सहायक। मैं यहां आपके अधिकारों को समझने और कानूनी मार्गदर्शन प्रदान करने के लिए हूं। आज मैं आपकी किस कानूनी समस्या में मदद कर सकता हूं?",
       'ta': "வணக்கம்! நான் வகீல் சாப் AI, மேம்பட்ட AI ஆல் இயக்கப்படும் உங்கள் சட்ட உதவியாளர். உங்கள் உரிமைகளைப் புரிந்துகொள்ளவும் சட்ட வழிகாட்டுதலை வழங்கவும் நான் இங்கே இருக்கிறேன். இன்று நான் உங்களுக்கு எந்த சட்டக் கேள்வியில் உதவ முடியும்?",
-      'te': "నమస్కారం! నేను వకీల్ సాబ్ AI, అధునాతన AI చే శక్తివంతం చేయబడిన మీ న్యాయ సహాయకుడను. మీ హక్కులను అర్థం చేసుకోవడంలో మరియు న్యాయ మార్గదర్శకత్వం అందించడంలో సహాయం చేయడానికి నేను ఇక్కడ ఉన్నాను। ఈరోజు నేను మీకు ఏ న్యాయ ప్రశ్నలో సహాయం చేయగలను?",
+      'te': "నమస్కారం! నేను వకీల్ సాబ్ AI, అధునాతన AI చే శక్తివంతం చేయబడిన మీ న్యాయ సహాయకుడను। మీ హక్కులను అర్థం చేసుకోవడంలో మరియు న్యాయ మార్గదర్శకత్వం అందించడంలో సహాయం చేయడానికి నేను ఇక్కడ ఉన్నాను। ఈరోజు నేను మీకు ఏ న్యాయ ప్రశ్నలో సహాయం చేయగలను?",
       'bn': "নমস্কার! আমি ভকিল সাহেব AI, উন্নত AI দ্বারা চালিত আপনার আইনি সহায়ক। আমি এখানে আপনার অধিকারগুলি বুঝতে এবং আইনি নির্দেশনা প্রদান করতে সাহায্য করার জন্য আছি। আজ আমি আপনাকে কোন আইনি প্রশ্নে সাহায্য করতে পারি?",
       'kn': "ನಮಸ್ಕಾರ! ನಾನು ವಕೀಲ್ ಸಾಬ್ AI, ಸುಧಾರಿತ AI ಯಿಂದ ಚಾಲಿತ ನಿಮ್ಮ ಕಾನೂನು ಸಹಾಯಕ. ನಿಮ್ಮ ಹಕ್ಕುಗಳನ್ನು ಅರ್ಥಮಾಡಿಕೊಳ್ಳಲು ಮತ್ತು ಕಾನೂನು ಮಾರ್ಗದರ್ಶನ ನೀಡಲು ನಾನು ಇಲ್ಲಿದ್ದೇನೆ. ಇಂದು ನಾನು ನಿಮಗೆ ಯಾವ ಕಾನೂನು ಪ್ರಶ್ನೆಯಲ್ಲಿ ಸಹಾಯ ಮಾಡಬಹುದು?",
       'mr': "नमस्कार! मी वकील साहेब AI आहे, प्रगत AI द्वारे चालवलेला तुमचा कायदेशीर सहाय्यक. तुमचे अधिकार समजून घेण्यासाठी आणि कायदेशीर मार्गदर्शन प्रदान करण्यासाठी मी येथे आहे. आज मी तुम्हाला कोणत्या कायदेशीर प्रश्नात मदत करू शकतो?",
@@ -150,9 +127,8 @@ const ChatPage: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim() || !user || !currentSession) return;
 
-    // Mark that user has interacted
     setHasUserInteracted(true);
 
     const userMessage: Message = {
@@ -166,6 +142,14 @@ const ChatPage: React.FC = () => {
     const currentInput = inputValue;
     setInputValue('');
     setIsTyping(true);
+
+    // Save user message to database
+    await ChatService.saveMessage(
+      currentSession.id,
+      'user',
+      currentInput,
+      selectedLanguage.code
+    );
 
     try {
       // Generate AI response using Gemini
@@ -198,6 +182,27 @@ const ChatPage: React.FC = () => {
       };
 
       setMessages(prev => [...prev, botResponse]);
+
+      // Save AI response to database
+      await ChatService.saveMessage(
+        currentSession.id,
+        'assistant',
+        aiResponse,
+        selectedLanguage.code
+      );
+
+      // Update session title if it's the first user message
+      if (conversationHistory.length === 0) {
+        const title = currentInput.length > 50 
+          ? currentInput.substring(0, 50) + '...' 
+          : currentInput;
+        await ChatService.updateSessionTitle(currentSession.id, title);
+        
+        // Refresh sessions list
+        const sessions = await ChatService.getUserSessions(user.id);
+        setChatSessions(sessions);
+      }
+
     } catch (error) {
       console.error('Error generating AI response:', error);
       
@@ -211,6 +216,16 @@ const ChatPage: React.FC = () => {
       };
 
       setMessages(prev => [...prev, errorMessage]);
+
+      // Save error message to database
+      await ChatService.saveMessage(
+        currentSession.id,
+        'assistant',
+        errorMessage.content,
+        selectedLanguage.code,
+        [],
+        true
+      );
     } finally {
       setIsTyping(false);
     }
@@ -228,9 +243,8 @@ const ChatPage: React.FC = () => {
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files) return;
+    if (!files || !user || !currentSession) return;
 
-    // Mark that user has interacted
     setHasUserInteracted(true);
 
     Array.from(files).forEach(async (file) => {
@@ -253,6 +267,15 @@ const ChatPage: React.FC = () => {
       setMessages(prev => [...prev, message]);
       setIsTyping(true);
 
+      // Save file upload message to database
+      await ChatService.saveMessage(
+        currentSession.id,
+        'user',
+        `Uploaded: ${file.name}`,
+        selectedLanguage.code,
+        [attachment]
+      );
+
       try {
         // Generate AI response for file upload
         const aiResponse = await geminiService.generateFileAnalysisResponse(
@@ -269,6 +292,14 @@ const ChatPage: React.FC = () => {
         };
 
         setMessages(prev => [...prev, botResponse]);
+
+        // Save AI response to database
+        await ChatService.saveMessage(
+          currentSession.id,
+          'assistant',
+          aiResponse,
+          selectedLanguage.code
+        );
       } catch (error) {
         console.error('Error generating file analysis response:', error);
         
@@ -282,6 +313,16 @@ const ChatPage: React.FC = () => {
         };
 
         setMessages(prev => [...prev, errorMessage]);
+
+        // Save error message to database
+        await ChatService.saveMessage(
+          currentSession.id,
+          'assistant',
+          errorMessage.content,
+          selectedLanguage.code,
+          [],
+          true
+        );
       } finally {
         setIsTyping(false);
       }
@@ -305,8 +346,6 @@ const ChatPage: React.FC = () => {
       };
 
       mediaRecorder.onstop = () => {
-        // In a real implementation, you would send this to a speech-to-text service
-        // For demo purposes, we'll simulate transcription
         simulateTranscription();
         stream.getTracks().forEach(track => track.stop());
       };
@@ -327,7 +366,6 @@ const ChatPage: React.FC = () => {
   };
 
   const simulateTranscription = () => {
-    // Simulate speech-to-text transcription
     const sampleTranscriptions = [
       "I have a question about my employment rights",
       "Can you help me understand my lease agreement",
@@ -354,12 +392,70 @@ const ChatPage: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const loadChatSession = (session: ChatSession) => {
-    setMessages(session.messages);
-    setCurrentSessionId(session.id);
+  const loadChatSession = async (session: ChatSession) => {
+    if (!user) return;
+
+    setCurrentSession(session);
     setIsHistoryOpen(false);
-    setHasUserInteracted(true); // Allow scrolling for loaded sessions
-    setConversationHistory([]); // Reset conversation history for loaded session
+    setHasUserInteracted(true);
+    setConversationHistory([]);
+
+    // Load messages from database
+    const dbMessages = await ChatService.getSessionMessages(session.id);
+    
+    // Convert database messages to UI messages
+    const uiMessages: Message[] = dbMessages.map(msg => ({
+      id: msg.id,
+      type: msg.role === 'user' ? 'user' : 'bot',
+      content: msg.content,
+      timestamp: new Date(msg.created_at || ''),
+      language: msg.language || undefined,
+      attachments: msg.attachments as FileAttachment[] || undefined,
+      isError: msg.is_error || false
+    }));
+
+    setMessages(uiMessages);
+  };
+
+  const createNewSession = async () => {
+    if (!user) return;
+
+    const session = await ChatService.createSession(
+      user.id,
+      selectedLanguage.code,
+      'New Chat Session'
+    );
+
+    if (session) {
+      setCurrentSession(session);
+      setMessages([]);
+      setConversationHistory([]);
+      setHasUserInteracted(false);
+
+      // Add welcome message
+      const welcomeMessage = getWelcomeMessage(selectedLanguage.code);
+      const welcomeMsg: Message = {
+        id: '1',
+        type: 'bot',
+        content: welcomeMessage,
+        timestamp: new Date(),
+        language: selectedLanguage.code
+      };
+
+      setMessages([welcomeMsg]);
+
+      // Save welcome message to database
+      await ChatService.saveMessage(
+        session.id,
+        'assistant',
+        welcomeMessage,
+        selectedLanguage.code
+      );
+
+      // Refresh sessions list
+      const sessions = await ChatService.getUserSessions(user.id);
+      setChatSessions(sessions);
+    }
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -374,6 +470,20 @@ const ChatPage: React.FC = () => {
     if (type.startsWith('image/')) return <Image className="h-4 w-4" />;
     return <FileText className="h-4 w-4" />;
   };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-black mb-4">Please Sign In</h2>
+          <p className="text-gray-600 mb-6">You need to be signed in to use the chat feature.</p>
+          <a href="/login" className="bg-[#B88271] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#a86f5e] transition-all shadow-lg">
+            Sign In
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
@@ -447,9 +557,9 @@ const ChatPage: React.FC = () => {
           </div>
         </AnimatedSection>
 
-        {/* Enlarged Chat Container - Takes full remaining height */}
+        {/* Chat Container */}
         <AnimatedSection animation="fadeIn" delay={200} className="flex-1 bg-white rounded-xl shadow-lg border border-gray-200 flex flex-col overflow-hidden">
-          {/* Messages Area - Much larger now */}
+          {/* Messages Area */}
           <div className="flex-1 p-8 overflow-y-auto">
             <div className="space-y-8">
               {messages.map((message) => (
@@ -532,7 +642,7 @@ const ChatPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Input Area - Larger and more prominent */}
+          {/* Input Area */}
           <div className="border-t border-gray-200 p-6 flex-shrink-0">
             <div className="flex items-center space-x-4">
               <input
@@ -608,16 +718,19 @@ const ChatPage: React.FC = () => {
             
             <div className="p-6 overflow-y-auto h-full">
               <div className="space-y-4">
+                <button
+                  onClick={createNewSession}
+                  className="w-full p-4 border-2 border-dashed border-[#B88271] text-[#B88271] rounded-lg hover:bg-[#f2e8e5] transition-colors"
+                >
+                  + Start New Chat
+                </button>
+
                 <div
                   className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                    currentSessionId === 'current' 
+                    currentSession?.id === 'current' 
                       ? 'border-[#B88271] bg-[#f2e8e5]' 
                       : 'border-gray-200 hover:border-[#B88271]'
                   }`}
-                  onClick={() => {
-                    setCurrentSessionId('current');
-                    setIsHistoryOpen(false);
-                  }}
                 >
                   <h3 className="font-medium text-black">Current Session</h3>
                   <p className="text-sm text-gray-600">Active conversation</p>
@@ -633,19 +746,22 @@ const ChatPage: React.FC = () => {
                   <div
                     key={session.id}
                     className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                      currentSessionId === session.id 
+                      currentSession?.id === session.id 
                         ? 'border-[#B88271] bg-[#f2e8e5]' 
                         : 'border-gray-200 hover:border-[#B88271]'
                     }`}
                     onClick={() => loadChatSession(session)}
                   >
-                    <h3 className="font-medium text-black">{session.title}</h3>
+                    <h3 className="font-medium text-black">{session.title || 'Untitled Chat'}</h3>
                     <p className="text-sm text-gray-600">
-                      {session.messages[session.messages.length - 1]?.content.substring(0, 60)}...
+                      {session.title && session.title.length > 60 
+                        ? session.title.substring(0, 60) + '...'
+                        : session.title || 'No messages yet'
+                      }
                     </p>
                     <div className="flex items-center justify-between mt-1">
                       <p className="text-xs text-gray-500">
-                        {session.timestamp.toLocaleDateString()} • {session.messages.length} messages
+                        {new Date(session.created_at || '').toLocaleDateString()}
                       </p>
                       <span className="text-lg">
                         {SUPPORTED_LANGUAGES.find((lang: Language) => lang.code === session.language)?.flag}
