@@ -9,6 +9,8 @@ import User from 'lucide-react/dist/esm/icons/user';
 import AlertCircle from 'lucide-react/dist/esm/icons/alert-circle';
 import CheckCircle from 'lucide-react/dist/esm/icons/check-circle';
 import Clock from 'lucide-react/dist/esm/icons/clock';
+import Wifi from 'lucide-react/dist/esm/icons/wifi';
+import WifiOff from 'lucide-react/dist/esm/icons/wifi-off';
 import useAuth from '../contexts/useAuth';
 import useLanguage from '../contexts/useLanguage';
 import LanguageSelector from '../components/LanguageSelector';
@@ -24,6 +26,15 @@ interface DebugStep {
   details?: any;
 }
 
+interface NetworkRequest {
+  url: string;
+  method: string;
+  status: number;
+  timestamp: string;
+  duration?: number;
+  error?: string;
+}
+
 const SignUpPage: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -37,6 +48,8 @@ const SignUpPage: React.FC = () => {
   const [debugSteps, setDebugSteps] = useState<DebugStep[]>([]);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'disconnected'>('unknown');
+  const [networkRequests, setNetworkRequests] = useState<NetworkRequest[]>([]);
+  const [deploymentApiBlocked, setDeploymentApiBlocked] = useState(false);
   const { signup } = useAuth();
   const { selectedLanguage } = useLanguage();
   const navigate = useNavigate();
@@ -44,6 +57,7 @@ const SignUpPage: React.FC = () => {
   // Initialize debug steps
   useEffect(() => {
     setDebugSteps([
+      { id: 'network-check', name: 'Network & API Check', status: 'pending' },
       { id: 'validation', name: 'Client-side Validation', status: 'pending' },
       { id: 'env-check', name: 'Environment Variables Check', status: 'pending' },
       { id: 'db-test', name: 'Database Connection Test', status: 'pending' },
@@ -54,20 +68,155 @@ const SignUpPage: React.FC = () => {
 
     // Test connection on component mount
     testInitialConnection();
+    
+    // Monitor network requests
+    monitorNetworkRequests();
+    
+    // Block deployment API calls
+    blockDeploymentApiCalls();
   }, []);
+
+  const blockDeploymentApiCalls = () => {
+    // Override fetch to block deployment API calls
+    const originalFetch = window.fetch;
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      
+      // Block deployment API calls
+      if (url.includes('/api/deploy/') || url.includes('deploy') || url.includes('51107963')) {
+        console.warn('🚫 Blocked deployment API call:', url);
+        setDeploymentApiBlocked(true);
+        setNetworkRequests(prev => [...prev, {
+          url,
+          method: init?.method || 'GET',
+          status: 0,
+          timestamp: new Date().toLocaleTimeString(),
+          error: 'BLOCKED - Deployment API call'
+        }]);
+        
+        // Return a fake successful response to prevent errors
+        return new Response(JSON.stringify({ blocked: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      // Log all other requests
+      const startTime = Date.now();
+      try {
+        const response = await originalFetch(input, init);
+        const duration = Date.now() - startTime;
+        
+        setNetworkRequests(prev => [...prev, {
+          url,
+          method: init?.method || 'GET',
+          status: response.status,
+          timestamp: new Date().toLocaleTimeString(),
+          duration
+        }]);
+        
+        return response;
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        setNetworkRequests(prev => [...prev, {
+          url,
+          method: init?.method || 'GET',
+          status: 0,
+          timestamp: new Date().toLocaleTimeString(),
+          duration,
+          error: error instanceof Error ? error.message : 'Network error'
+        }]);
+        throw error;
+      }
+    };
+  };
+
+  const monitorNetworkRequests = () => {
+    // Monitor XMLHttpRequest as well
+    const originalXHR = window.XMLHttpRequest;
+    window.XMLHttpRequest = function() {
+      const xhr = new originalXHR();
+      const originalOpen = xhr.open;
+      const originalSend = xhr.send;
+      
+      let url = '';
+      let method = '';
+      let startTime = 0;
+      
+      xhr.open = function(m: string, u: string | URL, ...args: any[]) {
+        method = m;
+        url = typeof u === 'string' ? u : u.href;
+        return originalOpen.apply(this, [m, u, ...args]);
+      };
+      
+      xhr.send = function(...args: any[]) {
+        startTime = Date.now();
+        
+        // Block deployment API calls
+        if (url.includes('/api/deploy/') || url.includes('deploy') || url.includes('51107963')) {
+          console.warn('🚫 Blocked XHR deployment API call:', url);
+          setDeploymentApiBlocked(true);
+          setNetworkRequests(prev => [...prev, {
+            url,
+            method,
+            status: 0,
+            timestamp: new Date().toLocaleTimeString(),
+            error: 'BLOCKED - Deployment API call (XHR)'
+          }]);
+          return;
+        }
+        
+        xhr.addEventListener('loadend', () => {
+          const duration = Date.now() - startTime;
+          setNetworkRequests(prev => [...prev, {
+            url,
+            method,
+            status: xhr.status,
+            timestamp: new Date().toLocaleTimeString(),
+            duration
+          }]);
+        });
+        
+        return originalSend.apply(this, args);
+      };
+      
+      return xhr;
+    };
+  };
 
   const testInitialConnection = async () => {
     try {
+      updateDebugStep('network-check', 'running', 'Testing network and API connectivity...');
+      
+      const startTime = Date.now();
+      
+      // Test 1: Basic internet connectivity
+      try {
+        await fetch('https://httpbin.org/get', { 
+          method: 'GET',
+          signal: AbortSignal.timeout(5000)
+        });
+        console.log('✅ Internet connectivity: OK');
+      } catch (error) {
+        console.warn('⚠️ Internet connectivity test failed:', error);
+      }
+      
+      // Test 2: Supabase connectivity
       const { data, error } = await supabase.auth.getSession();
+      const duration = Date.now() - startTime;
+      
       if (error) {
         setConnectionStatus('disconnected');
+        updateDebugStep('network-check', 'error', `Connection test failed: ${error.message} (${duration}ms)`, { error, duration });
         console.error('🔴 Initial connection test failed:', error);
       } else {
         setConnectionStatus('connected');
+        updateDebugStep('network-check', 'success', `All connectivity tests passed (${duration}ms)`, { duration });
         console.log('🟢 Initial connection test successful');
       }
     } catch (error) {
       setConnectionStatus('disconnected');
+      updateDebugStep('network-check', 'error', `Exception: ${error instanceof Error ? error.message : 'Unknown error'}`, { error });
       console.error('🔴 Initial connection exception:', error);
     }
   };
@@ -96,7 +245,9 @@ const SignUpPage: React.FC = () => {
     const envDetails = {
       VITE_SUPABASE_URL: supabaseUrl ? 'Present' : 'Missing',
       VITE_SUPABASE_ANON_KEY: supabaseAnonKey ? 'Present' : 'Missing',
-      urlFormat: supabaseUrl ? (supabaseUrl.startsWith('https://') ? 'Valid' : 'Invalid') : 'N/A'
+      urlFormat: supabaseUrl ? (supabaseUrl.startsWith('https://') ? 'Valid' : 'Invalid') : 'N/A',
+      deploymentApiBlocked: deploymentApiBlocked ? 'Yes' : 'No',
+      networkRequestsCount: networkRequests.length
     };
     
     if (!supabaseUrl || !supabaseAnonKey) {
@@ -115,22 +266,40 @@ const SignUpPage: React.FC = () => {
 
   const testDatabaseConnection = async (): Promise<boolean> => {
     try {
-      updateDebugStep('db-test', 'running', 'Testing connection...');
+      updateDebugStep('db-test', 'running', 'Testing database connection...');
       
       const startTime = Date.now();
       
-      // Test 1: Basic session check
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      // Test 1: Basic session check with timeout
+      const sessionPromise = supabase.auth.getSession();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Session check timeout')), 10000)
+      );
+      
+      const { data: sessionData, error: sessionError } = await Promise.race([
+        sessionPromise,
+        timeoutPromise
+      ]) as any;
+      
       if (sessionError) {
         updateDebugStep('db-test', 'error', `Session test failed: ${sessionError.message}`, { sessionError });
         return false;
       }
       
-      // Test 2: Database query test
-      const { data: testData, error: testError } = await supabase
+      // Test 2: Database query test with timeout
+      const queryPromise = supabase
         .from('profiles')
         .select('count')
         .limit(1);
+      
+      const queryTimeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Database query timeout')), 10000)
+      );
+      
+      const { data: testData, error: testError } = await Promise.race([
+        queryPromise,
+        queryTimeoutPromise
+      ]) as any;
       
       const duration = Date.now() - startTime;
       
@@ -140,7 +309,15 @@ const SignUpPage: React.FC = () => {
       }
       
       // Test 3: Auth service availability
-      const { data: authData, error: authError } = await supabase.auth.getUser();
+      const authPromise = supabase.auth.getUser();
+      const authTimeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Auth service timeout')), 10000)
+      );
+      
+      const { data: authData, error: authError } = await Promise.race([
+        authPromise,
+        authTimeoutPromise
+      ]) as any;
       
       const totalDuration = Date.now() - startTime;
       
@@ -153,7 +330,8 @@ const SignUpPage: React.FC = () => {
         sessionTest: 'passed', 
         queryTest: 'passed', 
         authTest: 'passed',
-        totalDuration 
+        totalDuration,
+        networkRequestsCount: networkRequests.length
       });
       return true;
     } catch (error) {
@@ -170,9 +348,13 @@ const SignUpPage: React.FC = () => {
     
     // Reset all debug steps
     setDebugSteps(prev => prev.map(step => ({ ...step, status: 'pending', message: undefined, timestamp: undefined, details: undefined })));
+    setNetworkRequests([]);
 
     try {
-      // STEP 1: Client-side validation
+      // STEP 1: Network and API check
+      await testInitialConnection();
+
+      // STEP 2: Client-side validation
       updateDebugStep('validation', 'running', 'Checking form inputs...');
       
       const validationDetails = {
@@ -180,7 +362,8 @@ const SignUpPage: React.FC = () => {
         email: email?.trim() && email.includes('@') ? 'Valid' : 'Invalid',
         password: password && password.length >= 6 ? 'Valid' : 'Invalid',
         confirmPassword: password === confirmPassword ? 'Valid' : 'Invalid',
-        terms: acceptTerms ? 'Accepted' : 'Not accepted'
+        terms: acceptTerms ? 'Accepted' : 'Not accepted',
+        deploymentApiBlocked: deploymentApiBlocked ? 'Yes' : 'No'
       };
       
       if (!name?.trim()) {
@@ -221,21 +404,21 @@ const SignUpPage: React.FC = () => {
 
       updateDebugStep('validation', 'success', 'All validations passed', validationDetails);
 
-      // STEP 2: Environment variables check
+      // STEP 3: Environment variables check
       const envValid = checkEnvironmentVariables();
       if (!envValid) {
         setError('Configuration error. Please check environment variables.');
         return;
       }
 
-      // STEP 3: Test database connection
+      // STEP 4: Test database connection
       const dbConnected = await testDatabaseConnection();
       if (!dbConnected) {
         setError('Unable to connect to database. Please check your internet connection and try again.');
         return;
       }
 
-      // STEP 4: Supabase Auth Signup
+      // STEP 5: Supabase Auth Signup
       updateDebugStep('auth-signup', 'running', 'Creating user account...');
       
       const authStartTime = Date.now();
@@ -252,7 +435,16 @@ const SignUpPage: React.FC = () => {
       
       console.log('🔐 Attempting signup with data:', { email: signupData.email, hasPassword: !!signupData.password, name: signupData.options.data.name });
       
-      const { data: authData, error: authError } = await supabase.auth.signUp(signupData);
+      // Add timeout to signup
+      const signupPromise = supabase.auth.signUp(signupData);
+      const signupTimeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Signup timeout - request took too long')), 30000)
+      );
+      
+      const { data: authData, error: authError } = await Promise.race([
+        signupPromise,
+        signupTimeoutPromise
+      ]) as any;
 
       const authDuration = Date.now() - authStartTime;
 
@@ -260,7 +452,8 @@ const SignUpPage: React.FC = () => {
         updateDebugStep('auth-signup', 'error', `${authError.message} (${authDuration}ms)`, { 
           authError, 
           authDuration,
-          signupData: { email: signupData.email, name: signupData.options.data.name }
+          signupData: { email: signupData.email, name: signupData.options.data.name },
+          networkRequestsCount: networkRequests.length
         });
         
         if (authError.message.includes('User already registered')) {
@@ -271,6 +464,8 @@ const SignUpPage: React.FC = () => {
           setError('Please enter a valid email address.');
         } else if (authError.message.includes('Signup is disabled')) {
           setError('Account creation is currently disabled. Please contact support.');
+        } else if (authError.message.includes('timeout')) {
+          setError('Signup request timed out. Please check your internet connection and try again.');
         } else {
           setError(`Signup failed: ${authError.message}`);
         }
@@ -287,10 +482,11 @@ const SignUpPage: React.FC = () => {
         userId: authData.user.id,
         userEmail: authData.user.email,
         authDuration,
-        session: authData.session ? 'Created' : 'Not created'
+        session: authData.session ? 'Created' : 'Not created',
+        networkRequestsCount: networkRequests.length
       });
 
-      // STEP 5: Profile Creation (check if trigger worked)
+      // STEP 6: Profile Creation (check if trigger worked)
       updateDebugStep('profile-create', 'running', 'Checking/creating user profile...');
       
       const profileStartTime = Date.now();
@@ -358,7 +554,7 @@ const SignUpPage: React.FC = () => {
         console.warn('⚠️ Profile creation exception, but continuing with signup');
       }
 
-      // STEP 6: Navigation
+      // STEP 7: Navigation
       updateDebugStep('navigation', 'running', 'Preparing navigation...');
       
       // Store language preference
@@ -408,6 +604,14 @@ const SignUpPage: React.FC = () => {
     }
   };
 
+  const getConnectionIcon = () => {
+    switch (connectionStatus) {
+      case 'connected': return <Wifi className="h-4 w-4" />;
+      case 'disconnected': return <WifiOff className="h-4 w-4" />;
+      default: return <Clock className="h-4 w-4" />;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -419,9 +623,16 @@ const SignUpPage: React.FC = () => {
           <h2 className="text-3xl font-bold text-black mb-2">Create your account</h2>
           <p className="text-gray-600">Join thousands who trust us with their legal needs</p>
           
-          {/* Connection Status Indicator */}
-          <div className={`text-xs mt-2 ${getConnectionStatusColor()}`}>
-            Database: {connectionStatus === 'connected' ? '🟢 Connected' : connectionStatus === 'disconnected' ? '🔴 Disconnected' : '🟡 Checking...'}
+          {/* Enhanced Connection Status Indicator */}
+          <div className={`text-xs mt-2 flex items-center justify-center space-x-2 ${getConnectionStatusColor()}`}>
+            {getConnectionIcon()}
+            <span>
+              {connectionStatus === 'connected' ? 'Connected' : 
+               connectionStatus === 'disconnected' ? 'Disconnected' : 'Checking...'}
+            </span>
+            {deploymentApiBlocked && (
+              <span className="text-orange-600">• Deploy API Blocked</span>
+            )}
           </div>
         </div>
 
@@ -436,11 +647,11 @@ const SignUpPage: React.FC = () => {
               </div>
             )}
 
-            {/* Debug Panel */}
+            {/* Enhanced Debug Panel */}
             {showDebugPanel && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-blue-800">Signup Progress</h3>
+                  <h3 className="text-sm font-medium text-blue-800">Signup Progress & Network Monitor</h3>
                   <button
                     type="button"
                     onClick={() => setShowDebugPanel(false)}
@@ -449,6 +660,34 @@ const SignUpPage: React.FC = () => {
                     Hide
                   </button>
                 </div>
+                
+                {/* Network Requests Monitor */}
+                {networkRequests.length > 0 && (
+                  <div className="mb-4 p-3 bg-white rounded border">
+                    <h4 className="text-xs font-medium text-gray-700 mb-2">
+                      Network Requests ({networkRequests.length})
+                    </h4>
+                    <div className="space-y-1 max-h-20 overflow-y-auto">
+                      {networkRequests.slice(-5).map((req, index) => (
+                        <div key={index} className="text-xs flex items-center space-x-2">
+                          <span className={`w-2 h-2 rounded-full ${
+                            req.status === 0 ? 'bg-red-500' :
+                            req.status >= 200 && req.status < 300 ? 'bg-green-500' :
+                            'bg-yellow-500'
+                          }`}></span>
+                          <span className="font-mono text-gray-600 truncate flex-1">
+                            {req.method} {req.url.length > 40 ? '...' + req.url.slice(-40) : req.url}
+                          </span>
+                          <span className="text-gray-500">
+                            {req.status || 'ERR'} {req.duration ? `(${req.duration}ms)` : ''}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Debug Steps */}
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {debugSteps.map((step) => (
                     <div key={step.id} className="text-xs">
@@ -646,13 +885,13 @@ const SignUpPage: React.FC = () => {
             </button>
 
             {/* Debug Toggle */}
-            {!showDebugPanel && debugSteps.some(step => step.status !== 'pending') && (
+            {!showDebugPanel && (debugSteps.some(step => step.status !== 'pending') || networkRequests.length > 0) && (
               <button
                 type="button"
                 onClick={() => setShowDebugPanel(true)}
                 className="w-full text-xs text-blue-600 hover:text-blue-800 py-2"
               >
-                Show Debug Information
+                Show Debug Information ({networkRequests.length} network requests)
               </button>
             )}
           </form>
