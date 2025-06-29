@@ -28,28 +28,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     // Get initial session
     const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await loadUserProfile(session.user);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (mounted) {
+          if (session?.user) {
+            await loadUserProfile(session.user);
+          }
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error('Error getting initial session:', error);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
-      setIsLoading(false);
     };
 
     getInitialSession();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        await loadUserProfile(session.user);
-      } else {
-        setUser(null);
+      if (!mounted) return;
+
+      try {
+        if (session?.user) {
+          await loadUserProfile(session.user);
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('Error in auth state change:', error);
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
-      setIsLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const loadUserProfile = async (supabaseUser: SupabaseUser) => {
@@ -80,8 +103,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    setIsLoading(true);
-    
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -90,7 +111,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Login error:', error);
-        setIsLoading(false);
         return { success: false, error: error.message };
       }
 
@@ -98,18 +118,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await loadUserProfile(data.user);
       }
 
-      setIsLoading(false);
       return { success: true };
     } catch (error) {
       console.error('Login error:', error);
-      setIsLoading(false);
       return { success: false, error: 'An unexpected error occurred. Please try again.' };
     }
   };
 
   const signup = async (name: string, email: string, password: string): Promise<boolean> => {
-    setIsLoading(true);
-    
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -118,7 +134,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Signup error:', error);
-        setIsLoading(false);
         return false;
       }
 
@@ -139,11 +154,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await loadUserProfile(data.user);
       }
 
-      setIsLoading(false);
       return true;
     } catch (error) {
       console.error('Signup error:', error);
-      setIsLoading(false);
       return false;
     }
   };

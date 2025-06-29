@@ -14,7 +14,8 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const { login, isLoading } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { login, isLoading: authLoading } = useAuth();
   const { selectedLanguage } = useLanguage();
   const navigate = useNavigate();
 
@@ -27,16 +28,28 @@ const LoginPage: React.FC = () => {
       return;
     }
 
-    // Store the selected language in session storage for immediate use
-    sessionStorage.setItem('chatLanguage', selectedLanguage.code);
+    setIsSubmitting(true);
 
-    const { success, error: loginError } = await login(email, password);
-    if (success) {
-      navigate('/dashboard');
-    } else {
-      setError(loginError || 'An unexpected error occurred. Please try again.');
+    try {
+      // Store the selected language in session storage for immediate use
+      sessionStorage.setItem('chatLanguage', selectedLanguage.code);
+
+      const { success, error: loginError } = await login(email, password);
+      
+      if (success) {
+        navigate('/dashboard');
+      } else {
+        setError(loginError || 'An unexpected error occurred. Please try again.');
+      }
+    } catch (error) {
+      console.error('Login submission error:', error);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  const isLoading = authLoading || isSubmitting;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -74,7 +87,8 @@ const LoginPage: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent"
+                  disabled={isLoading}
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Enter your email"
                 />
               </div>
@@ -96,13 +110,15 @@ const LoginPage: React.FC = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent"
+                  disabled={isLoading}
+                  className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Enter your password"
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   onClick={() => setShowPassword(!showPassword)}
+                  disabled={isLoading}
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -127,7 +143,8 @@ const LoginPage: React.FC = () => {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
-                  className="h-4 w-4 text-[#B88271] focus:ring-[#B88271] border-gray-300 rounded"
+                  disabled={isLoading}
+                  className="h-4 w-4 text-[#B88271] focus:ring-[#B88271] border-gray-300 rounded disabled:opacity-50"
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
                   Remember me
