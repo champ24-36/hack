@@ -32,7 +32,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   return (
     <div className={`relative ${className}`}>
       {showLabel && (
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="language-selector" className="block text-sm font-medium text-gray-700 mb-2">
           <Globe className="inline h-4 w-4 mr-1" />
           Select Your Preferred Language
         </label>
@@ -40,6 +40,8 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
       
       <div className="relative">
         <button
+          id="language-selector"
+          name="preferredLanguage"
           type="button"
           onClick={() => setIsOpen(!isOpen)}
           className={`w-full ${sizeClasses[size]} border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent bg-white text-left flex items-center justify-between hover:border-[#B88271] transition-colors`}

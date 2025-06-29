@@ -156,7 +156,7 @@ const ContactPage: React.FC = () => {
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8">
               <h2 className="text-2xl font-bold text-black mb-6">Send us a Message</h2>
               
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form className="space-y-6" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label htmlFor="contact-name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -243,7 +243,7 @@ const ContactPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="contact-urgency" className="block text-sm font-medium text-gray-700 mb-2">
                     Urgency Level
                   </label>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
