@@ -133,8 +133,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      setIsLoading(true);
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
@@ -142,7 +140,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Login error:', error);
-        setIsLoading(false);
         
         // Handle specific error cases
         if (error.message.includes('Invalid login credentials')) {
@@ -151,6 +148,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return { success: false, error: 'Please check your email and click the confirmation link before signing in.' };
         } else if (error.message.includes('Too many requests')) {
           return { success: false, error: 'Too many login attempts. Please wait a moment before trying again.' };
+        } else if (error.message.includes('User not found')) {
+          return { success: false, error: 'No account found with this email address. Please check your email or create a new account.' };
         } else {
           return { success: false, error: error.message || 'An error occurred during sign in. Please try again.' };
         }
@@ -160,19 +159,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await loadUserProfile(data.user);
       }
 
-      setIsLoading(false);
       return { success: true };
     } catch (error) {
       console.error('Login error:', error);
-      setIsLoading(false);
       return { success: false, error: 'An unexpected error occurred. Please try again.' };
     }
   };
 
   const signup = async (name: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      setIsLoading(true);
-      
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -185,7 +180,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Signup error:', error);
-        setIsLoading(false);
         
         // Handle specific error cases
         if (error.message.includes('User already registered') || error.message.includes('user_already_exists')) {
@@ -218,11 +212,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await loadUserProfile(data.user);
       }
 
-      setIsLoading(false);
       return { success: true };
     } catch (error) {
       console.error('Signup error:', error);
-      setIsLoading(false);
       return { success: false, error: 'An unexpected error occurred. Please try again.' };
     }
   };
