@@ -85,7 +85,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error loading profile:', error);
-        return;
+        // If profile doesn't exist, create one
+        if (error.code === 'PGRST116') {
+          await createUserProfile(supabaseUser);
+          return;
+        }
       }
 
       const userData: User = {
@@ -99,52 +103,100 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userData);
     } catch (error) {
       console.error('Error loading user profile:', error);
+      // Create profile if it doesn't exist
+      await createUserProfile(supabaseUser);
+    }
+  };
+
+  const createUserProfile = async (supabaseUser: SupabaseUser) => {
+    try {
+      const profileData = {
+        id: supabaseUser.id,
+        name: supabaseUser.email?.split('@')[0] || 'User',
+        email: supabaseUser.email || '',
+      };
+
+      const { error } = await supabase
+        .from('profiles')
+        .insert(profileData);
+
+      if (error) {
+        console.error('Error creating profile:', error);
+      } else {
+        // Reload the profile after creation
+        await loadUserProfile(supabaseUser);
+      }
+    } catch (error) {
+      console.error('Error creating user profile:', error);
     }
   };
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
+      setIsLoading(true);
+      
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
       if (error) {
         console.error('Login error:', error);
-        return { success: false, error: error.message };
+        setIsLoading(false);
+        
+        // Handle specific error cases
+        if (error.message.includes('Invalid login credentials')) {
+          return { success: false, error: 'Invalid email or password. Please check your credentials and try again.' };
+        } else if (error.message.includes('Email not confirmed')) {
+          return { success: false, error: 'Please check your email and click the confirmation link before signing in.' };
+        } else if (error.message.includes('Too many requests')) {
+          return { success: false, error: 'Too many login attempts. Please wait a moment before trying again.' };
+        } else {
+          return { success: false, error: error.message || 'An error occurred during sign in. Please try again.' };
+        }
       }
 
       if (data.user) {
         await loadUserProfile(data.user);
       }
 
+      setIsLoading(false);
       return { success: true };
     } catch (error) {
       console.error('Login error:', error);
+      setIsLoading(false);
       return { success: false, error: 'An unexpected error occurred. Please try again.' };
     }
   };
 
   const signup = async (name: string, email: string, password: string): Promise<boolean> => {
     try {
+      setIsLoading(true);
+      
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
+        options: {
+          data: {
+            name: name.trim(),
+          }
+        }
       });
 
       if (error) {
         console.error('Signup error:', error);
+        setIsLoading(false);
         return false;
       }
 
       if (data.user) {
-        // Create profile
+        // Create profile immediately
         const { error: profileError } = await supabase
           .from('profiles')
           .insert({
             id: data.user.id,
-            name,
-            email,
+            name: name.trim(),
+            email: email.trim(),
           });
 
         if (profileError) {
@@ -154,16 +206,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await loadUserProfile(data.user);
       }
 
+      setIsLoading(false);
       return true;
     } catch (error) {
       console.error('Signup error:', error);
+      setIsLoading(false);
       return false;
     }
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    try {
+      setIsLoading(true);
+      await supabase.auth.signOut();
+      setUser(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const value = {
