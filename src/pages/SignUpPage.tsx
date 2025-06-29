@@ -28,6 +28,7 @@ const SignUpPage: React.FC = () => {
     e.preventDefault();
     setError('');
 
+    // Client-side validation
     if (!name || !email || !password || !confirmPassword) {
       setError('Please fill in all fields');
       return;
@@ -65,6 +66,7 @@ const SignUpPage: React.FC = () => {
       sessionStorage.setItem('chatLanguage', selectedLanguage.code);
 
       const result = await signup(name.trim(), email.trim(), password);
+      
       if (result.success) {
         navigate('/dashboard');
       } else {

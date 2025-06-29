@@ -168,6 +168,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signup = async (name: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
+      // Validate inputs
+      if (!name?.trim()) {
+        return { success: false, error: 'Please enter your full name.' };
+      }
+
+      if (!email?.trim()) {
+        return { success: false, error: 'Please enter your email address.' };
+      }
+
+      if (!email.includes('@')) {
+        return { success: false, error: 'Please enter a valid email address.' };
+      }
+
+      if (!password || password.length < 6) {
+        return { success: false, error: 'Password must be at least 6 characters long.' };
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -190,6 +207,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return { success: false, error: 'Please enter a valid email address.' };
         } else if (error.message.includes('Signup is disabled')) {
           return { success: false, error: 'Account registration is currently disabled. Please contact support.' };
+        } else if (error.message.includes('Email rate limit exceeded')) {
+          return { success: false, error: 'Too many signup attempts. Please wait a moment before trying again.' };
         } else {
           return { success: false, error: error.message || 'Failed to create account. Please try again.' };
         }
@@ -197,19 +216,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data.user) {
         // Create profile immediately
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: data.user.id,
-            name: name.trim(),
-            email: email.trim(),
-          });
+        try {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: data.user.id,
+              name: name.trim(),
+              email: email.trim(),
+            });
 
-        if (profileError) {
-          console.error('Profile creation error:', profileError);
+          if (profileError) {
+            console.error('Profile creation error:', profileError);
+            // Don't fail the signup if profile creation fails, as the trigger should handle it
+          }
+
+          await loadUserProfile(data.user);
+        } catch (profileError) {
+          console.error('Error creating profile during signup:', profileError);
+          // Don't fail the signup, the trigger should create the profile
         }
-
-        await loadUserProfile(data.user);
       }
 
       return { success: true };
