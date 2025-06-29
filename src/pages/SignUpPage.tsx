@@ -20,7 +20,7 @@ const SignUpPage: React.FC = () => {
   const [error, setError] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { signup, isLoading: authLoading } = useAuth();
+  const { signup } = useAuth();
   const { selectedLanguage } = useLanguage();
   const navigate = useNavigate();
 
@@ -68,10 +68,6 @@ const SignUpPage: React.FC = () => {
     }
   };
 
-  // Only disable form during submission, not during initial auth loading
-  const isFormDisabled = isSubmitting;
-  const isButtonLoading = authLoading || isSubmitting;
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -108,7 +104,7 @@ const SignUpPage: React.FC = () => {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  disabled={isFormDisabled}
+                  disabled={isSubmitting}
                   className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
                   placeholder="Enter your full name"
                 />
@@ -131,7 +127,7 @@ const SignUpPage: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  disabled={isFormDisabled}
+                  disabled={isSubmitting}
                   className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
                   placeholder="Enter your email"
                 />
@@ -154,7 +150,7 @@ const SignUpPage: React.FC = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  disabled={isFormDisabled}
+                  disabled={isSubmitting}
                   className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
                   placeholder="Create a password"
                 />
@@ -162,7 +158,7 @@ const SignUpPage: React.FC = () => {
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   onClick={() => setShowPassword(!showPassword)}
-                  disabled={isFormDisabled}
+                  disabled={isSubmitting}
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -189,7 +185,7 @@ const SignUpPage: React.FC = () => {
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  disabled={isFormDisabled}
+                  disabled={isSubmitting}
                   className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
                   placeholder="Confirm your password"
                 />
@@ -197,7 +193,7 @@ const SignUpPage: React.FC = () => {
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  disabled={isFormDisabled}
+                  disabled={isSubmitting}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -223,7 +219,7 @@ const SignUpPage: React.FC = () => {
                 type="checkbox"
                 checked={acceptTerms}
                 onChange={(e) => setAcceptTerms(e.target.checked)}
-                disabled={isFormDisabled}
+                disabled={isSubmitting}
                 className="h-4 w-4 text-[#B88271] focus:ring-[#B88271] border-gray-300 rounded disabled:opacity-50"
               />
               <label htmlFor="accept-terms" className="ml-2 block text-sm text-gray-700">
@@ -240,10 +236,10 @@ const SignUpPage: React.FC = () => {
 
             <button
               type="submit"
-              disabled={isButtonLoading}
+              disabled={isSubmitting || !name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim() || !acceptTerms}
               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-[#B88271] hover:bg-[#a86f5e] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#B88271] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {isButtonLoading ? (
+              {isSubmitting ? (
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
               ) : (
                 'Create Account'
