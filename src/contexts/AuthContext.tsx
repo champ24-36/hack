@@ -16,7 +16,7 @@ export interface User {
 export interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signup: (name: string, email: string, password: string) => Promise<boolean>;
+  signup: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isLoading: boolean;
 }
@@ -169,7 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (name: string, email: string, password: string): Promise<boolean> => {
+  const signup = async (name: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       setIsLoading(true);
       
@@ -186,7 +186,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('Signup error:', error);
         setIsLoading(false);
-        return false;
+        
+        // Handle specific error cases
+        if (error.message.includes('User already registered') || error.message.includes('user_already_exists')) {
+          return { success: false, error: 'An account with this email address already exists. Please try signing in instead.' };
+        } else if (error.message.includes('Password should be at least')) {
+          return { success: false, error: 'Password must be at least 6 characters long.' };
+        } else if (error.message.includes('Invalid email')) {
+          return { success: false, error: 'Please enter a valid email address.' };
+        } else if (error.message.includes('Signup is disabled')) {
+          return { success: false, error: 'Account registration is currently disabled. Please contact support.' };
+        } else {
+          return { success: false, error: error.message || 'Failed to create account. Please try again.' };
+        }
       }
 
       if (data.user) {
@@ -207,11 +219,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setIsLoading(false);
-      return true;
+      return { success: true };
     } catch (error) {
       console.error('Signup error:', error);
       setIsLoading(false);
-      return false;
+      return { success: false, error: 'An unexpected error occurred. Please try again.' };
     }
   };
 

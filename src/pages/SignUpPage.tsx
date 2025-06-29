@@ -54,11 +54,11 @@ const SignUpPage: React.FC = () => {
       // Store the selected language in session storage for immediate use
       sessionStorage.setItem('chatLanguage', selectedLanguage.code);
 
-      const success = await signup(name, email, password);
-      if (success) {
+      const result = await signup(name, email, password);
+      if (result.success) {
         navigate('/dashboard');
       } else {
-        setError('Failed to create account. Please try again.');
+        setError(result.error || 'Failed to create account. Please try again.');
       }
     } catch (error) {
       console.error('Signup submission error:', error);
