@@ -85,8 +85,7 @@ const LoginPage: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  disabled={isSubmitting}
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent"
                   placeholder="Enter your email"
                 />
               </div>
@@ -108,15 +107,13 @@ const LoginPage: React.FC = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  disabled={isSubmitting}
-                  className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
+                  className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent"
                   placeholder="Enter your password"
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   onClick={() => setShowPassword(!showPassword)}
-                  disabled={isSubmitting}
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -141,8 +138,7 @@ const LoginPage: React.FC = () => {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
-                  disabled={isSubmitting}
-                  className="h-4 w-4 text-[#B88271] focus:ring-[#B88271] border-gray-300 rounded disabled:opacity-50"
+                  className="h-4 w-4 text-[#B88271] focus:ring-[#B88271] border-gray-300 rounded"
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
                   Remember me
@@ -158,7 +154,7 @@ const LoginPage: React.FC = () => {
 
             <button
               type="submit"
-              disabled={isSubmitting || !email.trim() || !password.trim()}
+              disabled={isSubmitting}
               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-[#B88271] hover:bg-[#a86f5e] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#B88271] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {isSubmitting ? (
