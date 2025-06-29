@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Scale from 'lucide-react/dist/esm/icons/scale';
 import Eye from 'lucide-react/dist/esm/icons/eye';
@@ -7,9 +7,21 @@ import Mail from 'lucide-react/dist/esm/icons/mail';
 import Lock from 'lucide-react/dist/esm/icons/lock';
 import User from 'lucide-react/dist/esm/icons/user';
 import AlertCircle from 'lucide-react/dist/esm/icons/alert-circle';
+import CheckCircle from 'lucide-react/dist/esm/icons/check-circle';
+import Clock from 'lucide-react/dist/esm/icons/clock';
 import useAuth from '../contexts/useAuth';
 import useLanguage from '../contexts/useLanguage';
 import LanguageSelector from '../components/LanguageSelector';
+import { supabase } from '../lib/supabase';
+
+interface DebugStep {
+  id: string;
+  name: string;
+  status: 'pending' | 'running' | 'success' | 'error';
+  message?: string;
+  timestamp?: string;
+  duration?: number;
+}
 
 const SignUpPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -21,101 +33,248 @@ const SignUpPage: React.FC = () => {
   const [error, setError] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const [debugSteps, setDebugSteps] = useState<DebugStep[]>([]);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
   const { signup } = useAuth();
   const { selectedLanguage } = useLanguage();
   const navigate = useNavigate();
 
-  const addDebugInfo = (message: string) => {
-    console.log('🐛 DEBUG:', message);
-    setDebugInfo(prev => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${message}`]);
+  // Initialize debug steps
+  useEffect(() => {
+    setDebugSteps([
+      { id: 'validation', name: 'Client-side Validation', status: 'pending' },
+      { id: 'db-test', name: 'Database Connection Test', status: 'pending' },
+      { id: 'auth-signup', name: 'Supabase Auth Signup', status: 'pending' },
+      { id: 'profile-create', name: 'Profile Creation', status: 'pending' },
+      { id: 'navigation', name: 'Navigation to Dashboard', status: 'pending' }
+    ]);
+  }, []);
+
+  const updateDebugStep = (stepId: string, status: DebugStep['status'], message?: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugSteps(prev => prev.map(step => 
+      step.id === stepId 
+        ? { ...step, status, message, timestamp }
+        : step
+    ));
+    
+    console.log(`🔍 [${timestamp}] ${stepId.toUpperCase()}: ${status} ${message ? `- ${message}` : ''}`);
+  };
+
+  const testDatabaseConnection = async (): Promise<boolean> => {
+    try {
+      updateDebugStep('db-test', 'running', 'Testing connection...');
+      
+      const startTime = Date.now();
+      
+      // Test 1: Basic connection
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        updateDebugStep('db-test', 'error', `Session test failed: ${sessionError.message}`);
+        return false;
+      }
+      
+      // Test 2: Database query
+      const { data: testData, error: testError } = await supabase
+        .from('profiles')
+        .select('count')
+        .limit(1);
+      
+      const duration = Date.now() - startTime;
+      
+      if (testError) {
+        updateDebugStep('db-test', 'error', `Query test failed: ${testError.message} (${duration}ms)`);
+        return false;
+      }
+      
+      updateDebugStep('db-test', 'success', `Connection successful (${duration}ms)`);
+      return true;
+    } catch (error) {
+      updateDebugStep('db-test', 'error', `Exception: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return false;
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setDebugInfo([]);
-    
-    addDebugInfo('Form submission started');
-
-    // Client-side validation
-    if (!name || !email || !password || !confirmPassword) {
-      const missingFields = [];
-      if (!name) missingFields.push('name');
-      if (!email) missingFields.push('email');
-      if (!password) missingFields.push('password');
-      if (!confirmPassword) missingFields.push('confirm password');
-      
-      const errorMsg = `Please fill in all fields. Missing: ${missingFields.join(', ')}`;
-      setError(errorMsg);
-      addDebugInfo(`Validation failed: ${errorMsg}`);
-      return;
-    }
-
-    if (!name.trim()) {
-      setError('Please enter your full name');
-      addDebugInfo('Name validation failed: empty name');
-      return;
-    }
-
-    if (!email.includes('@')) {
-      setError('Please enter a valid email address');
-      addDebugInfo('Email validation failed: no @ symbol');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      addDebugInfo('Password validation failed: passwords do not match');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      addDebugInfo('Password validation failed: too short');
-      return;
-    }
-
-    if (!acceptTerms) {
-      setError('Please accept the terms and conditions');
-      addDebugInfo('Terms validation failed: not accepted');
-      return;
-    }
-
-    addDebugInfo('All client-side validation passed');
     setIsSubmitting(true);
+    setShowDebugPanel(true);
+    
+    // Reset all debug steps
+    setDebugSteps(prev => prev.map(step => ({ ...step, status: 'pending', message: undefined, timestamp: undefined })));
 
     try {
-      // Store the selected language in session storage for immediate use
-      sessionStorage.setItem('chatLanguage', selectedLanguage.code);
-      addDebugInfo('Language stored in session storage');
-
-      addDebugInfo('Calling signup function...');
-      const result = await signup(name.trim(), email.trim(), password);
+      // STEP 1: Client-side validation
+      updateDebugStep('validation', 'running', 'Checking form inputs...');
       
-      addDebugInfo(`Signup result: ${result.success ? 'SUCCESS' : 'FAILED'}`);
-      
-      if (result.success) {
-        addDebugInfo('Navigating to dashboard...');
-        navigate('/dashboard');
-      } else {
-        const errorMsg = result.error || 'Failed to create account. Please try again.';
-        setError(errorMsg);
-        addDebugInfo(`Signup error: ${errorMsg}`);
+      if (!name?.trim()) {
+        updateDebugStep('validation', 'error', 'Name is required');
+        setError('Please enter your full name');
+        return;
       }
+
+      if (!email?.trim()) {
+        updateDebugStep('validation', 'error', 'Email is required');
+        setError('Please enter your email address');
+        return;
+      }
+
+      if (!email.includes('@')) {
+        updateDebugStep('validation', 'error', 'Invalid email format');
+        setError('Please enter a valid email address');
+        return;
+      }
+
+      if (!password || password.length < 6) {
+        updateDebugStep('validation', 'error', 'Password too short');
+        setError('Password must be at least 6 characters long');
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        updateDebugStep('validation', 'error', 'Passwords do not match');
+        setError('Passwords do not match');
+        return;
+      }
+
+      if (!acceptTerms) {
+        updateDebugStep('validation', 'error', 'Terms not accepted');
+        setError('Please accept the terms and conditions');
+        return;
+      }
+
+      updateDebugStep('validation', 'success', 'All validations passed');
+
+      // STEP 2: Test database connection
+      const dbConnected = await testDatabaseConnection();
+      if (!dbConnected) {
+        setError('Unable to connect to database. Please check your internet connection and try again.');
+        return;
+      }
+
+      // STEP 3: Supabase Auth Signup
+      updateDebugStep('auth-signup', 'running', 'Creating user account...');
+      
+      const authStartTime = Date.now();
+      
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            name: name.trim(),
+          }
+        }
+      });
+
+      const authDuration = Date.now() - authStartTime;
+
+      if (authError) {
+        updateDebugStep('auth-signup', 'error', `${authError.message} (${authDuration}ms)`);
+        
+        if (authError.message.includes('User already registered')) {
+          setError('An account with this email already exists. Please try signing in instead.');
+        } else if (authError.message.includes('Password should be at least')) {
+          setError('Password must be at least 6 characters long.');
+        } else if (authError.message.includes('Invalid email')) {
+          setError('Please enter a valid email address.');
+        } else {
+          setError(`Signup failed: ${authError.message}`);
+        }
+        return;
+      }
+
+      if (!authData?.user) {
+        updateDebugStep('auth-signup', 'error', `No user data returned (${authDuration}ms)`);
+        setError('Signup completed but no user data received. Please try signing in.');
+        return;
+      }
+
+      updateDebugStep('auth-signup', 'success', `User created: ${authData.user.id} (${authDuration}ms)`);
+
+      // STEP 4: Profile Creation (if needed)
+      updateDebugStep('profile-create', 'running', 'Creating user profile...');
+      
+      const profileStartTime = Date.now();
+      
+      try {
+        // Check if profile already exists (trigger might have created it)
+        const { data: existingProfile, error: checkError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', authData.user.id)
+          .single();
+
+        if (checkError && checkError.code !== 'PGRST116') {
+          updateDebugStep('profile-create', 'error', `Profile check failed: ${checkError.message}`);
+        } else if (existingProfile) {
+          updateDebugStep('profile-create', 'success', `Profile already exists (trigger created)`);
+        } else {
+          // Create profile manually
+          const { data: newProfile, error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: authData.user.id,
+              name: name.trim(),
+              email: email.trim(),
+            })
+            .select()
+            .single();
+
+          const profileDuration = Date.now() - profileStartTime;
+
+          if (profileError) {
+            updateDebugStep('profile-create', 'error', `Manual creation failed: ${profileError.message} (${profileDuration}ms)`);
+            // Don't fail the signup for profile creation issues
+          } else {
+            updateDebugStep('profile-create', 'success', `Profile created manually (${profileDuration}ms)`);
+          }
+        }
+      } catch (profileException) {
+        updateDebugStep('profile-create', 'error', `Exception: ${profileException instanceof Error ? profileException.message : 'Unknown'}`);
+        // Don't fail the signup for profile creation issues
+      }
+
+      // STEP 5: Navigation
+      updateDebugStep('navigation', 'running', 'Redirecting to dashboard...');
+      
+      // Store language preference
+      sessionStorage.setItem('chatLanguage', selectedLanguage.code);
+      
+      // Small delay to ensure all async operations complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      updateDebugStep('navigation', 'success', 'Redirecting...');
+      navigate('/dashboard');
+
     } catch (error) {
-      console.error('💥 Signup submission exception:', error);
-      const errorMsg = error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.';
-      setError(errorMsg);
-      addDebugInfo(`Exception caught: ${errorMsg}`);
+      console.error('💥 Signup exception:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      setError(`Signup failed: ${errorMessage}`);
+      
+      // Update the current step as error
+      const currentStep = debugSteps.find(step => step.status === 'running');
+      if (currentStep) {
+        updateDebugStep(currentStep.id, 'error', `Exception: ${errorMessage}`);
+      }
     } finally {
       setIsSubmitting(false);
-      addDebugInfo('Form submission completed');
     }
   };
 
-  // Don't disable inputs based on global loading state, only local submission state
-  const inputsDisabled = isSubmitting;
+  const getStepIcon = (status: DebugStep['status']) => {
+    switch (status) {
+      case 'success':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'error':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      case 'running':
+        return <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>;
+      default:
+        return <Clock className="h-4 w-4 text-gray-400" />;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -140,13 +299,40 @@ const SignUpPage: React.FC = () => {
               </div>
             )}
 
-            {/* Debug Information */}
-            {debugInfo.length > 0 && (
-              <div className="bg-blue-50 border border-blue-200 text-blue-600 px-4 py-3 rounded-lg text-xs">
-                <div className="font-medium mb-2">Debug Information:</div>
-                {debugInfo.map((info, index) => (
-                  <div key={index} className="text-xs">{info}</div>
-                ))}
+            {/* Debug Panel */}
+            {showDebugPanel && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium text-blue-800">Signup Progress</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowDebugPanel(false)}
+                    className="text-blue-600 hover:text-blue-800 text-xs"
+                  >
+                    Hide
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {debugSteps.map((step) => (
+                    <div key={step.id} className="flex items-center space-x-2 text-xs">
+                      {getStepIcon(step.status)}
+                      <span className={`font-medium ${
+                        step.status === 'success' ? 'text-green-700' :
+                        step.status === 'error' ? 'text-red-700' :
+                        step.status === 'running' ? 'text-blue-700' :
+                        'text-gray-600'
+                      }`}>
+                        {step.name}
+                      </span>
+                      {step.message && (
+                        <span className="text-gray-600">- {step.message}</span>
+                      )}
+                      {step.timestamp && (
+                        <span className="text-gray-500">({step.timestamp})</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -168,7 +354,7 @@ const SignUpPage: React.FC = () => {
                   onChange={(e) => setName(e.target.value)}
                   className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Enter your full name"
-                  disabled={inputsDisabled}
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
@@ -191,7 +377,7 @@ const SignUpPage: React.FC = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Enter your email"
-                  disabled={inputsDisabled}
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
@@ -214,13 +400,13 @@ const SignUpPage: React.FC = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Create a password"
-                  disabled={inputsDisabled}
+                  disabled={isSubmitting}
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center disabled:opacity-50"
                   onClick={() => setShowPassword(!showPassword)}
-                  disabled={inputsDisabled}
+                  disabled={isSubmitting}
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -249,13 +435,13 @@ const SignUpPage: React.FC = () => {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Confirm your password"
-                  disabled={inputsDisabled}
+                  disabled={isSubmitting}
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center disabled:opacity-50"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  disabled={inputsDisabled}
+                  disabled={isSubmitting}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -282,7 +468,7 @@ const SignUpPage: React.FC = () => {
                 checked={acceptTerms}
                 onChange={(e) => setAcceptTerms(e.target.checked)}
                 className="h-4 w-4 text-[#B88271] focus:ring-[#B88271] border-gray-300 rounded disabled:opacity-50"
-                disabled={inputsDisabled}
+                disabled={isSubmitting}
               />
               <label htmlFor="accept-terms" className="ml-2 block text-sm text-gray-700">
                 I agree to the{' '}
@@ -298,7 +484,7 @@ const SignUpPage: React.FC = () => {
 
             <button
               type="submit"
-              disabled={inputsDisabled}
+              disabled={isSubmitting}
               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-[#B88271] hover:bg-[#a86f5e] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#B88271] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {isSubmitting ? (
@@ -310,6 +496,17 @@ const SignUpPage: React.FC = () => {
                 'Create Account'
               )}
             </button>
+
+            {/* Debug Toggle */}
+            {!showDebugPanel && debugSteps.some(step => step.status !== 'pending') && (
+              <button
+                type="button"
+                onClick={() => setShowDebugPanel(true)}
+                className="w-full text-xs text-blue-600 hover:text-blue-800 py-2"
+              >
+                Show Debug Information
+              </button>
+            )}
           </form>
 
           <div className="mt-6">

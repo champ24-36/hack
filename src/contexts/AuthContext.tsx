@@ -206,50 +206,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signup = async (name: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      console.log('📝 Starting signup process for:', email);
+      console.log('📝 AuthContext signup called for:', email);
       
-      // Validate inputs
-      if (!name?.trim()) {
-        console.log('❌ Validation failed: No name provided');
-        return { success: false, error: 'Please enter your full name.' };
-      }
-
-      if (!email?.trim()) {
-        console.log('❌ Validation failed: No email provided');
-        return { success: false, error: 'Please enter your email address.' };
-      }
-
-      if (!email.includes('@')) {
-        console.log('❌ Validation failed: Invalid email format');
-        return { success: false, error: 'Please enter a valid email address.' };
-      }
-
-      if (!password || password.length < 6) {
-        console.log('❌ Validation failed: Password too short');
-        return { success: false, error: 'Password must be at least 6 characters long.' };
-      }
-
-      console.log('✅ Input validation passed');
-
-      // Test database connection first
-      console.log('🔍 Testing database connection...');
-      try {
-        const { data: testData, error: testError } = await supabase
-          .from('profiles')
-          .select('count')
-          .limit(1);
-        
-        if (testError) {
-          console.error('❌ Database connection test failed:', testError);
-          return { success: false, error: `Database connection failed: ${testError.message}` };
-        }
-        console.log('✅ Database connection test passed');
-      } catch (dbError) {
-        console.error('💥 Database connection exception:', dbError);
-        return { success: false, error: 'Unable to connect to database. Please try again.' };
-      }
-
-      console.log('🚀 Calling Supabase auth.signUp...');
+      // This is now just a wrapper - the actual signup logic is in the SignUpPage
+      // to provide better debugging visibility
       
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
@@ -261,88 +221,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
 
-      console.log('📊 Signup response:', {
-        hasData: !!data,
-        hasUser: !!data?.user,
-        hasSession: !!data?.session,
-        error: error?.message || 'No error'
-      });
-
       if (error) {
-        console.error('❌ Signup error details:', {
-          message: error.message,
-          status: error.status,
-          name: error.name,
-          cause: error.cause
-        });
-        
-        // Handle specific error cases
-        if (error.message.includes('User already registered') || error.message.includes('user_already_exists')) {
-          return { success: false, error: 'An account with this email address already exists. Please try signing in instead.' };
-        } else if (error.message.includes('Password should be at least')) {
-          return { success: false, error: 'Password must be at least 6 characters long.' };
-        } else if (error.message.includes('Invalid email')) {
-          return { success: false, error: 'Please enter a valid email address.' };
-        } else if (error.message.includes('Signup is disabled')) {
-          return { success: false, error: 'Account registration is currently disabled. Please contact support.' };
-        } else if (error.message.includes('Email rate limit exceeded')) {
-          return { success: false, error: 'Too many signup attempts. Please wait a moment before trying again.' };
-        } else if (error.message.includes('Database error')) {
-          return { success: false, error: 'Database error occurred. Please try again or contact support.' };
-        } else {
-          return { success: false, error: `Signup failed: ${error.message}` };
-        }
+        console.error('❌ AuthContext signup error:', error);
+        return { success: false, error: error.message };
       }
 
       if (!data?.user) {
-        console.error('❌ No user data returned from signup');
-        return { success: false, error: 'Signup completed but no user data received. Please try signing in.' };
+        console.error('❌ No user data returned from AuthContext signup');
+        return { success: false, error: 'Signup completed but no user data received.' };
       }
 
-      console.log('✅ User created successfully:', data.user.id);
+      console.log('✅ AuthContext signup successful:', data.user.id);
 
-      // Create profile immediately
-      try {
-        console.log('📝 Creating user profile...');
-        
-        const profileData = {
-          id: data.user.id,
-          name: name.trim(),
-          email: email.trim(),
-        };
+      // Load the user profile
+      await loadUserProfile(data.user);
 
-        const { data: profileResult, error: profileError } = await supabase
-          .from('profiles')
-          .insert(profileData)
-          .select()
-          .single();
-
-        if (profileError) {
-          console.error('❌ Profile creation error:', profileError);
-          // Don't fail the signup if profile creation fails, as the trigger should handle it
-          console.log('⚠️ Profile creation failed, but continuing with signup...');
-        } else {
-          console.log('✅ Profile created successfully:', profileResult);
-        }
-
-        await loadUserProfile(data.user);
-      } catch (profileError) {
-        console.error('💥 Exception creating profile during signup:', profileError);
-        // Don't fail the signup, the trigger should create the profile
-        console.log('⚠️ Profile creation exception, but continuing...');
-      }
-
-      console.log('🎉 Signup process completed successfully');
       return { success: true };
     } catch (error) {
-      console.error('💥 Exception in signup:', error);
-      
-      // Provide more detailed error information
-      if (error instanceof Error) {
-        return { success: false, error: `Signup failed: ${error.message}` };
-      } else {
-        return { success: false, error: 'An unexpected error occurred during signup. Please try again.' };
-      }
+      console.error('💥 Exception in AuthContext signup:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'An unexpected error occurred.' };
     }
   };
 
