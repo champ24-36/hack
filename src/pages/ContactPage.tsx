@@ -159,10 +159,12 @@ const ContactPage: React.FC = () => {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="contact-name" className="block text-sm font-medium text-gray-700 mb-2">
                       Full Name *
                     </label>
                     <input
+                      id="contact-name"
+                      name="fullName"
                       type="text"
                       required
                       value={formData.name}
@@ -173,10 +175,12 @@ const ContactPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="contact-email" className="block text-sm font-medium text-gray-700 mb-2">
                       Email Address *
                     </label>
                     <input
+                      id="contact-email"
+                      name="email"
                       type="email"
                       required
                       value={formData.email}
@@ -189,10 +193,12 @@ const ContactPage: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="contact-phone" className="block text-sm font-medium text-gray-700 mb-2">
                       Phone Number
                     </label>
                     <input
+                      id="contact-phone"
+                      name="phone"
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => handleInputChange('phone', e.target.value)}
@@ -202,10 +208,12 @@ const ContactPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="contact-category" className="block text-sm font-medium text-gray-700 mb-2">
                       Legal Category
                     </label>
                     <select
+                      id="contact-category"
+                      name="category"
                       value={formData.category}
                       onChange={(e) => handleInputChange('category', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#B88271] focus:border-transparent"
@@ -219,10 +227,12 @@ const ContactPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="contact-subject" className="block text-sm font-medium text-gray-700 mb-2">
                     Subject *
                   </label>
                   <input
+                    id="contact-subject"
+                    name="subject"
                     type="text"
                     required
                     value={formData.subject}
@@ -260,10 +270,12 @@ const ContactPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="contact-message" className="block text-sm font-medium text-gray-700 mb-2">
                     Message *
                   </label>
                   <textarea
+                    id="contact-message"
+                    name="message"
                     rows={6}
                     required
                     value={formData.message}
