@@ -6,6 +6,7 @@ import EyeOff from 'lucide-react/dist/esm/icons/eye-off';
 import Mail from 'lucide-react/dist/esm/icons/mail';
 import Lock from 'lucide-react/dist/esm/icons/lock';
 import User from 'lucide-react/dist/esm/icons/user';
+import AlertCircle from 'lucide-react/dist/esm/icons/alert-circle';
 import useAuth from '../contexts/useAuth';
 import useLanguage from '../contexts/useLanguage';
 import LanguageSelector from '../components/LanguageSelector';
@@ -20,63 +21,96 @@ const SignUpPage: React.FC = () => {
   const [error, setError] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const { signup } = useAuth();
   const { selectedLanguage } = useLanguage();
   const navigate = useNavigate();
 
+  const addDebugInfo = (message: string) => {
+    console.log('🐛 DEBUG:', message);
+    setDebugInfo(prev => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${message}`]);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setDebugInfo([]);
+    
+    addDebugInfo('Form submission started');
 
     // Client-side validation
     if (!name || !email || !password || !confirmPassword) {
-      setError('Please fill in all fields');
+      const missingFields = [];
+      if (!name) missingFields.push('name');
+      if (!email) missingFields.push('email');
+      if (!password) missingFields.push('password');
+      if (!confirmPassword) missingFields.push('confirm password');
+      
+      const errorMsg = `Please fill in all fields. Missing: ${missingFields.join(', ')}`;
+      setError(errorMsg);
+      addDebugInfo(`Validation failed: ${errorMsg}`);
       return;
     }
 
     if (!name.trim()) {
       setError('Please enter your full name');
+      addDebugInfo('Name validation failed: empty name');
       return;
     }
 
     if (!email.includes('@')) {
       setError('Please enter a valid email address');
+      addDebugInfo('Email validation failed: no @ symbol');
       return;
     }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
+      addDebugInfo('Password validation failed: passwords do not match');
       return;
     }
 
     if (password.length < 6) {
       setError('Password must be at least 6 characters long');
+      addDebugInfo('Password validation failed: too short');
       return;
     }
 
     if (!acceptTerms) {
       setError('Please accept the terms and conditions');
+      addDebugInfo('Terms validation failed: not accepted');
       return;
     }
 
+    addDebugInfo('All client-side validation passed');
     setIsSubmitting(true);
 
     try {
       // Store the selected language in session storage for immediate use
       sessionStorage.setItem('chatLanguage', selectedLanguage.code);
+      addDebugInfo('Language stored in session storage');
 
+      addDebugInfo('Calling signup function...');
       const result = await signup(name.trim(), email.trim(), password);
       
+      addDebugInfo(`Signup result: ${result.success ? 'SUCCESS' : 'FAILED'}`);
+      
       if (result.success) {
+        addDebugInfo('Navigating to dashboard...');
         navigate('/dashboard');
       } else {
-        setError(result.error || 'Failed to create account. Please try again.');
+        const errorMsg = result.error || 'Failed to create account. Please try again.';
+        setError(errorMsg);
+        addDebugInfo(`Signup error: ${errorMsg}`);
       }
     } catch (error) {
-      console.error('Signup submission error:', error);
-      setError('An unexpected error occurred. Please try again.');
+      console.error('💥 Signup submission exception:', error);
+      const errorMsg = error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.';
+      setError(errorMsg);
+      addDebugInfo(`Exception caught: ${errorMsg}`);
     } finally {
       setIsSubmitting(false);
+      addDebugInfo('Form submission completed');
     }
   };
 
@@ -99,7 +133,20 @@ const SignUpPage: React.FC = () => {
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
-                {error}
+                <div className="flex items-center space-x-2">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Debug Information */}
+            {debugInfo.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-600 px-4 py-3 rounded-lg text-xs">
+                <div className="font-medium mb-2">Debug Information:</div>
+                {debugInfo.map((info, index) => (
+                  <div key={index} className="text-xs">{info}</div>
+                ))}
               </div>
             )}
 
