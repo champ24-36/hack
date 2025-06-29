@@ -731,7 +731,7 @@ const SignUpPage: React.FC = () => {
                 </div>
                 <input
                   id="signup-name"
-                  name="name"
+                  name="fullName"
                   type="text"
                   autoComplete="name"
                   required
