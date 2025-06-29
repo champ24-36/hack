@@ -159,11 +159,13 @@ const ProfilePage: React.FC = () => {
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="profile-name" className="block text-sm font-medium text-gray-700 mb-2">
                         Full Name
                       </label>
                       {isEditing ? (
                         <input
+                          id="profile-name"
+                          name="fullName"
                           type="text"
                           value={formData.name}
                           onChange={(e) => handleInputChange('name', e.target.value)}
@@ -178,11 +180,13 @@ const ProfilePage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="profile-email" className="block text-sm font-medium text-gray-700 mb-2">
                         Email Address
                       </label>
                       {isEditing ? (
                         <input
+                          id="profile-email"
+                          name="email"
                           type="email"
                           value={formData.email}
                           onChange={(e) => handleInputChange('email', e.target.value)}
@@ -197,11 +201,13 @@ const ProfilePage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="profile-phone" className="block text-sm font-medium text-gray-700 mb-2">
                         Phone Number
                       </label>
                       {isEditing ? (
                         <input
+                          id="profile-phone"
+                          name="phone"
                           type="tel"
                           value={formData.phone}
                           onChange={(e) => handleInputChange('phone', e.target.value)}
@@ -216,11 +222,13 @@ const ProfilePage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="profile-dob" className="block text-sm font-medium text-gray-700 mb-2">
                         Date of Birth
                       </label>
                       {isEditing ? (
                         <input
+                          id="profile-dob"
+                          name="dateOfBirth"
                           type="date"
                           value={formData.dateOfBirth}
                           onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
@@ -235,11 +243,13 @@ const ProfilePage: React.FC = () => {
                     </div>
 
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="profile-address" className="block text-sm font-medium text-gray-700 mb-2">
                         Address
                       </label>
                       {isEditing ? (
                         <input
+                          id="profile-address"
+                          name="address"
                           type="text"
                           value={formData.address}
                           onChange={(e) => handleInputChange('address', e.target.value)}
@@ -254,11 +264,13 @@ const ProfilePage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="profile-occupation" className="block text-sm font-medium text-gray-700 mb-2">
                         Occupation
                       </label>
                       {isEditing ? (
                         <input
+                          id="profile-occupation"
+                          name="occupation"
                           type="text"
                           value={formData.occupation}
                           onChange={(e) => handleInputChange('occupation', e.target.value)}
@@ -273,11 +285,13 @@ const ProfilePage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="profile-emergency" className="block text-sm font-medium text-gray-700 mb-2">
                         Emergency Contact
                       </label>
                       {isEditing ? (
                         <input
+                          id="profile-emergency"
+                          name="emergencyContact"
                           type="text"
                           value={formData.emergencyContact}
                           onChange={(e) => handleInputChange('emergencyContact', e.target.value)}
@@ -309,7 +323,13 @@ const ProfilePage: React.FC = () => {
                         <p className="text-sm text-gray-600">Receive updates about your consultations</p>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked />
+                        <input 
+                          id="email-notifications"
+                          name="emailNotifications"
+                          type="checkbox" 
+                          className="sr-only peer" 
+                          defaultChecked 
+                        />
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#f2e8e5] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#B88271]"></div>
                       </label>
                     </div>
@@ -320,7 +340,12 @@ const ProfilePage: React.FC = () => {
                         <p className="text-sm text-gray-600">Get text reminders for appointments</p>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" />
+                        <input 
+                          id="sms-notifications"
+                          name="smsNotifications"
+                          type="checkbox" 
+                          className="sr-only peer" 
+                        />
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#f2e8e5] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#B88271]"></div>
                       </label>
                     </div>
