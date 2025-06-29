@@ -78,7 +78,7 @@ const LoginPage: React.FC = () => {
             )}
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-2">
                 Email Address
               </label>
               <div className="relative">
@@ -86,7 +86,7 @@ const LoginPage: React.FC = () => {
                   <Mail className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
-                  id="email"
+                  id="login-email"
                   name="email"
                   type="email"
                   autoComplete="email"
@@ -101,7 +101,7 @@ const LoginPage: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-2">
                 Password
               </label>
               <div className="relative">
@@ -109,7 +109,7 @@ const LoginPage: React.FC = () => {
                   <Lock className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
-                  id="password"
+                  id="login-password"
                   name="password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
@@ -125,6 +125,7 @@ const LoginPage: React.FC = () => {
                   className="absolute inset-y-0 right-0 pr-3 flex items-center disabled:opacity-50"
                   onClick={() => setShowPassword(!showPassword)}
                   disabled={inputsDisabled}
+                  aria-label="Toggle password visibility"
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
@@ -146,13 +147,13 @@ const LoginPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input
-                  id="remember-me"
+                  id="login-remember-me"
                   name="remember-me"
                   type="checkbox"
                   className="h-4 w-4 text-[#B88271] focus:ring-[#B88271] border-gray-300 rounded disabled:opacity-50"
                   disabled={inputsDisabled}
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
+                <label htmlFor="login-remember-me" className="ml-2 block text-sm text-gray-700">
                   Remember me
                 </label>
               </div>
